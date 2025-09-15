@@ -2,11 +2,14 @@ package main
 
 import (
 	"bytes"
+	"database/sql"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"proxy/database"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -57,6 +60,11 @@ func MockingbirdProxy(c *gin.Context) {
 			if err != nil {
 				fmt.Errorf("Error %s", err.Error())
 			}
+			// Guardar request en base de datos
+			headersJSON, _ := json.Marshal(r.In.Header)
+			requestID, _ := database.InsertRequest(db, r.In.Method, r.In.URL.String(), string(headersJSON), string(body))
+			c.Set("requestID", requestID)
+
 			fmt.Println("%s", body)
 			r.Out.Body = io.NopCloser(bytes.NewBuffer(body))
 		},
@@ -66,8 +74,14 @@ func MockingbirdProxy(c *gin.Context) {
 			if err != nil {
 				return err
 			}
-			fmt.Println("%s", body)
 
+			// Guardar response en base de datos
+			if requestID, exists := c.Get("requestID"); exists {
+				headersJSON, _ := json.Marshal(r.Header)
+				database.InsertResponse(db, requestID.(int64), r.StatusCode, string(headersJSON), string(body))
+			}
+
+			fmt.Println("%s", body)
 			r.Body = io.NopCloser(bytes.NewBuffer(body))
 			return nil
 		},
@@ -76,7 +90,18 @@ func MockingbirdProxy(c *gin.Context) {
 	proxy.ServeHTTP(c.Writer, c.Request)
 }
 
+var db *sql.DB
+
 func main() {
+	// Inicializar base de datos
+	var err error
+	db, err = database.InitDB("./database/proxy.db")
+	if err != nil {
+		fmt.Printf("Error initializing database: %v\n", err)
+		return
+	}
+	defer db.Close()
+
 	r := gin.Default()
 
 	r.Use(func(c *gin.Context) {
@@ -96,12 +121,15 @@ func main() {
 	// Proxy externo
 	//r.Any("/*proxyPath", proxy)
 
-	fmt.Println(" Proxy server running on :3000")
-	fmt.Println(" External proxy: http://localhost:3000/users?url=https://jsonplaceholder.typicode.com")
-	fmt.Println(" Mockingbird routes:")
-	fmt.Println(" - http://localhost:3000/mockingbird/jsonplaceholder/*")
-	fmt.Println(" - http://localhost:3000/mockingbird/sypago/*")
-	fmt.Println(" - http://localhost:3000/mockingbird/users/*")
+	// Ruta para consultar requests guardadas
+	r.GET("/requests", func(c *gin.Context) {
+		requests, err := database.GetAllRequests(db, 50, 0)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, requests)
+	})
 
 	r.Run(":3000")
 }
