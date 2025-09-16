@@ -48,7 +48,7 @@ func MockingbirdProxy(c *gin.Context) {
 		targetPort = "8080" // Default
 	}
 
-	targetURL := "https://pruebas.sypago.net" + ":" + targetPort
+	targetURL := "http://localhost" + ":" + targetPort
 	remote, _ := url.Parse(targetURL)
 
 	proxy := &httputil.ReverseProxy{
@@ -122,14 +122,6 @@ func main() {
 	//r.Any("/*proxyPath", proxy)
 
 	// Ruta para consultar requests guardadas
-	r.GET("/requests", func(c *gin.Context) {
-		requests, err := database.GetAllRequests(db, 50, 0)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusOK, requests)
-	})
 
 	r.Run(":3000")
 }

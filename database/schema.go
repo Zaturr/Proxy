@@ -8,7 +8,6 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// InitDB inicializa la base de datos SQLite y crea las tablas necesarias
 func InitDB(dbPath string) (*sql.DB, error) {
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
@@ -45,7 +44,6 @@ func InitDB(dbPath string) (*sql.DB, error) {
 	CREATE INDEX IF NOT EXISTS idx_responses_timestamp ON proxy_responses(timestamp);
 	`
 
-	// Ejecutar las consultas de creación
 	if _, err := db.Exec(createRequestsTable); err != nil {
 		return nil, fmt.Errorf("error creating requests table: %v", err)
 	}
