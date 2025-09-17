@@ -90,6 +90,31 @@ func MockingbirdProxy(c *gin.Context) {
 	proxy.ServeHTTP(c.Writer, c.Request)
 }
 
+func searchHandler(c *gin.Context) {
+	var criteria database.SearchCriteria
+
+	if err := c.ShouldBindJSON(&criteria); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON format"})
+		return
+	}
+
+	// Realizar búsqueda jerárquica
+	bestMatch, err := database.HierarchicalSearch(db, criteria)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Search failed"})
+		return
+	}
+
+	// Si no se encontró ningún resultado, retornar 404
+	if bestMatch == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "No matching records found"})
+		return
+	}
+
+	// Retornar el mejor candidato encontrado
+	c.JSON(http.StatusOK, bestMatch)
+}
+
 var db *sql.DB
 
 func main() {
@@ -122,6 +147,7 @@ func main() {
 	//r.Any("/*proxyPath", proxy)
 
 	// Ruta para consultar requests guardadas
+	//r.POST("/search", searchHandler)
 
 	r.Run(":3000")
 }
