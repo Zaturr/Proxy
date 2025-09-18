@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+
 	"strings"
 )
 
@@ -264,13 +265,35 @@ func HierarchicalSearch(db *sql.DB, criteria SearchCriteria) (*BestMatch, error)
 	return bestMatch, nil
 }
 
-// extractEndpoint extrae el endpoint de una URL completa
+// extractEndpoint extrae el endpoint de una URL completa o path
 func extractEndpoint(url string) string {
-	parts := strings.Split(url, "/")
-	if len(parts) > 3 {
-		return "/" + strings.Join(parts[3:], "/")
+	// Si la URL ya empieza con "/", es un path directo
+	if strings.HasPrefix(url, "/") {
+		return url
 	}
-	return "/"
+
+	// Remover protocolo si existe
+	if strings.HasPrefix(url, "http://") {
+		url = strings.TrimPrefix(url, "http://")
+	} else if strings.HasPrefix(url, "https://") {
+		url = strings.TrimPrefix(url, "https://")
+	}
+
+	// Buscar la primera barra después del host:puerto
+	slashIndex := strings.Index(url, "/")
+	if slashIndex == -1 {
+		return "/"
+	}
+
+	// Extraer el path completo
+	path := url[slashIndex:]
+
+	// Si el path está vacío, retornar "/"
+	if path == "" {
+		return "/"
+	}
+
+	return path
 }
 
 // parseHeaders convierte el string JSON de headers a map

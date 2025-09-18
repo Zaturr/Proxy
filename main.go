@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	build "proxy/Build"
 	"proxy/database"
 	"strings"
 
@@ -39,16 +40,18 @@ func MockingbirdProxy(c *gin.Context) {
 	switch {
 	case strings.HasPrefix(path, "/jsonplaceholder"):
 		targetPort = "8080"
-
-	case strings.HasPrefix(path, "/callback"):
+	case strings.Contains(path, "/callback"):
 		targetPort = "8080"
 	case strings.Contains(path, "/auth"):
 		targetPort = "8086"
+	case strings.Contains(path, "/api"):
+		targetPort = "8081"
 	default:
 		targetPort = "8080" // Default
 	}
 
 	targetURL := "http://localhost" + ":" + targetPort
+	fmt.Printf("Path: %s, Target Port: %s, Target URL: %s\n", path, targetPort, targetURL)
 	remote, _ := url.Parse(targetURL)
 
 	proxy := &httputil.ReverseProxy{
@@ -115,6 +118,45 @@ func searchHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, bestMatch)
 }
 
+func searchConfigHandler(c *gin.Context) {
+	var criteria database.SearchCriteria
+
+	if err := c.ShouldBindJSON(&criteria); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON format"})
+		return
+	}
+
+	// Realizar búsqueda jerárquica
+	bestMatch, err := database.HierarchicalSearch(db, criteria)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Search failed"})
+		return
+	}
+
+	// Si no se encontró ningún resultado, retornar 404
+	if bestMatch == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "No matching records found"})
+		return
+	}
+
+	// Convertir database.BestMatch a build.BestMatch
+	buildBestMatch := &build.BestMatch{
+		Endpoint:   bestMatch.Endpoint,
+		Headers:    bestMatch.Headers,
+		Body:       bestMatch.Body,
+		StatusCode: bestMatch.StatusCode,
+		Score:      bestMatch.Score,
+		Method:     bestMatch.Method,
+		URL:        bestMatch.URL,
+	}
+
+	// Generar configuración de Mockingbird
+	config := build.GenerateMockingbirdConfig(buildBestMatch)
+
+	// Retornar la configuración generada
+	c.JSON(http.StatusOK, config)
+}
+
 var db *sql.DB
 
 func main() {
@@ -140,14 +182,12 @@ func main() {
 		c.Next()
 	})
 
+	// Rutas para búsqueda (comentadas temporalmente)
+	//r.POST("/search", searchHandler)
+	//r.POST("/search/config", searchConfigHandler)
+
 	// Rutas para Mockingbird
 	r.Any("/*path", MockingbirdProxy)
-
-	// Proxy externo
-	//r.Any("/*proxyPath", proxy)
-
-	// Ruta para consultar requests guardadas
-	//r.POST("/search", searchHandler)
 
 	r.Run(":3000")
 }
