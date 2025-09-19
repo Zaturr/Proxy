@@ -3,6 +3,8 @@ package build
 import (
 	"strconv"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 // MockingbirdConfig representa la estructura completa de configuración de Mockingbird
@@ -46,67 +48,89 @@ type BestMatch struct {
 	URL        string            `json:"url"`
 }
 
-// GenerateMockingbirdConfig genera la configuración de Mockingbird basada en BestMatch
-func GenerateMockingbirdConfig(bestMatch *BestMatch) *MockingbirdConfig {
-	// Extraer host y puerto de la URL
-	host, port := extractHostAndPort(bestMatch.URL)
-
-	// Crear la configuración
-	config := &MockingbirdConfig{
-		HTTP: HTTPConfig{
-			Servers: []ServerConfig{
-				{
-					Listen:     port,
-					Logger:     true,
-					LoggerPath: "./logs/serverA",
-					Name:       host,
-					Version:    "0.0.1",
-					Location: []LocationConfig{
-						{
-							Path:       bestMatch.Endpoint,
-							Method:     bestMatch.Method,
-							Response:   bestMatch.Body,
-							StatusCode: bestMatch.StatusCode,
-							Headers:    bestMatch.Headers,
-						},
-					},
-				},
-			},
-		},
+// GenerateMockingbirdConfig genera la configuración de Mockingbird basada en múltiples BestMatch
+func GenerateMockingbirdConfig(matches []BestMatch) *MockingbirdConfig {
+	if len(matches) == 0 {
+		return &MockingbirdConfig{}
 	}
 
-	return config
+	host, port := extractHostAndPort(matches[0].URL)
+	locations := createLocationsFromGroups(GroupSimilarRequests(matches))
+
+	return &MockingbirdConfig{
+		HTTP: HTTPConfig{
+			Servers: []ServerConfig{{
+				Listen:     port,
+				Logger:     true,
+				LoggerPath: "./logs/serverA",
+				Name:       host,
+				Version:    "0.0.1",
+				Location:   locations,
+			}},
+		},
+	}
+}
+
+// createLocationsFromGroups convierte grupos de requests en LocationConfig
+func createLocationsFromGroups(groups map[string][]BestMatch) []LocationConfig {
+	var locations []LocationConfig
+	for _, group := range groups {
+		if len(group) > 0 {
+			first := group[0]
+			locations = append(locations, LocationConfig{
+				Path:       first.Endpoint,
+				Method:     first.Method,
+				Response:   first.Body,
+				StatusCode: first.StatusCode,
+				Headers:    first.Headers,
+			})
+		}
+	}
+	return locations
 }
 
 // extractHostAndPort extrae el host y puerto de una URL
 func extractHostAndPort(url string) (string, int) {
-	// Remover protocolo si existe
-	if strings.HasPrefix(url, "http://") {
-		url = strings.TrimPrefix(url, "http://")
-	} else if strings.HasPrefix(url, "https://") {
-		url = strings.TrimPrefix(url, "https://")
-	}
+	// Remover protocolo
+	url = strings.TrimPrefix(strings.TrimPrefix(url, "http://"), "https://")
 
-	// Dividir por : para separar host y puerto
+	// Extraer host y puerto
 	parts := strings.Split(url, ":")
-	if len(parts) >= 2 {
-		// Extraer puerto
-		portStr := strings.Split(parts[1], "/")[0] // Remover path si existe
-		if port, err := strconv.Atoi(portStr); err == nil {
-			return parts[0], port
-		}
-	}
-
-	// Si no se encuentra puerto, usar valores por defecto
 	host := parts[0]
+
+	// Limpiar host si tiene path
 	if strings.Contains(host, "/") {
 		host = strings.Split(host, "/")[0]
 	}
 
-	// Puerto por defecto basado en si es localhost
-	if host == "localhost" || host == "127.0.0.1" {
-		return host, 8080
+	// Extraer puerto si existe
+	if len(parts) >= 2 {
+		if portStr := strings.Split(parts[1], "/")[0]; portStr != "" {
+			if port, err := strconv.Atoi(portStr); err == nil {
+				return host, port
+			}
+		}
 	}
 
-	return host, 8080 // Puerto por defecto para todos los casos
+	// Puerto por defecto
+	return host, 8080
+}
+
+// GroupSimilarRequests agrupa requests similares por endpoint y método
+func GroupSimilarRequests(requests []BestMatch) map[string][]BestMatch {
+	groups := make(map[string][]BestMatch)
+	for _, request := range requests {
+		key := request.Method + ":" + request.Endpoint
+		groups[key] = append(groups[key], request)
+	}
+	return groups
+}
+
+// ToYAML convierte la configuración Mockingbird a formato YAML
+func (config *MockingbirdConfig) ToYAML() (string, error) {
+	yamlData, err := yaml.Marshal(config)
+	if err != nil {
+		return "", err
+	}
+	return string(yamlData), nil
 }

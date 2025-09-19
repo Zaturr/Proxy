@@ -4,299 +4,198 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-
 	"strings"
 )
 
 // HierarchicalSearch realiza una búsqueda jerárquica en la base de datos
 func HierarchicalSearch(db *sql.DB, criteria SearchCriteria) (*BestMatch, error) {
-	var bestMatch *BestMatch
-	currentScore := 0
+	// Lista de funciones de búsqueda en orden de prioridad
+	searchers := []func(*sql.DB, SearchCriteria) (*BestMatch, error){
+		searchByURL,          // Prioridad 100
+		searchByEndpoint,     // Prioridad 80
+		searchByRequestBody,  // Prioridad 60
+		searchByResponseBody, // Prioridad 40
+		searchByHeaders,      // Prioridad 20
+		searchByMethod,       // Prioridad 10
+	}
 
-	// 1. Búsqueda por URL completa (mayor prioridad)
-	if criteria.URL != "" {
-		query := `
-			SELECT r.id, r.method, r.url, r.headers, r.body, res.status_code, res.body as response_body
-			FROM proxy_requests r
-			LEFT JOIN proxy_responses res ON r.id = res.request_id
-			WHERE r.url = ?
-		`
-
-		rows, err := db.Query(query, criteria.URL)
+	// Ejecutar búsquedas en orden de prioridad
+	for _, searcher := range searchers {
+		result, err := searcher(db, criteria)
 		if err != nil {
-			return nil, fmt.Errorf("error searching by URL: %v", err)
+			return nil, err
 		}
-		defer rows.Close()
 
-		for rows.Next() {
-			var requestID int64
-			var method, url, headers, body, responseBody string
-			var statusCode int
-
-			err := rows.Scan(&requestID, &method, &url, &headers, &body, &statusCode, &responseBody)
-			if err != nil {
-				continue
-			}
-
-			score := 100 // Puntuación máxima para URL completa
-			if bestMatch == nil || score > currentScore {
-				bestMatch = &BestMatch{
-					Endpoint:   extractEndpoint(url),
-					Headers:    parseHeaders(headers),
-					Body:       responseBody,
-					StatusCode: statusCode,
-					Score:      score,
-					Method:     method,
-					URL:        url,
-				}
-				currentScore = score
-			}
+		if result != nil {
+			return result, nil
 		}
 	}
 
-	// 2. Búsqueda por endpoint (segunda prioridad)
-	if criteria.Endpoint != "" && (bestMatch == nil || currentScore < 80) {
-		query := `
-			SELECT r.id, r.method, r.url, r.headers, r.body, res.status_code, res.body as response_body
-			FROM proxy_requests r
-			LEFT JOIN proxy_responses res ON r.id = res.request_id
-			WHERE r.url LIKE ?
-		`
-
-		rows, err := db.Query(query, "%"+criteria.Endpoint+"%")
-		if err != nil {
-			return nil, fmt.Errorf("error searching by endpoint: %v", err)
-		}
-		defer rows.Close()
-
-		for rows.Next() {
-			var requestID int64
-			var method, url, headers, body, responseBody string
-			var statusCode int
-
-			err := rows.Scan(&requestID, &method, &url, &headers, &body, &statusCode, &responseBody)
-			if err != nil {
-				continue
-			}
-
-			score := 80 // Puntuación para endpoint
-			if bestMatch == nil || score > currentScore {
-				bestMatch = &BestMatch{
-					Endpoint:   extractEndpoint(url),
-					Headers:    parseHeaders(headers),
-					Body:       responseBody,
-					StatusCode: statusCode,
-					Score:      score,
-					Method:     method,
-					URL:        url,
-				}
-				currentScore = score
-			}
-		}
-	}
-
-	// 3. Búsqueda por body del request (tercera prioridad)
-	if criteria.Body != "" && (bestMatch == nil || currentScore < 60) {
-		query := `
-			SELECT r.id, r.method, r.url, r.headers, r.body, res.status_code, res.body as response_body
-			FROM proxy_requests r
-			LEFT JOIN proxy_responses res ON r.id = res.request_id
-			WHERE r.body LIKE ?
-		`
-
-		rows, err := db.Query(query, "%"+criteria.Body+"%")
-		if err != nil {
-			return nil, fmt.Errorf("error searching by body: %v", err)
-		}
-		defer rows.Close()
-
-		for rows.Next() {
-			var requestID int64
-			var method, url, headers, body, responseBody string
-			var statusCode int
-
-			err := rows.Scan(&requestID, &method, &url, &headers, &body, &statusCode, &responseBody)
-			if err != nil {
-				continue
-			}
-
-			score := 60 // Puntuación para body
-			if bestMatch == nil || score > currentScore {
-				bestMatch = &BestMatch{
-					Endpoint:   extractEndpoint(url),
-					Headers:    parseHeaders(headers),
-					Body:       responseBody,
-					StatusCode: statusCode,
-					Score:      score,
-					Method:     method,
-					URL:        url,
-				}
-				currentScore = score
-			}
-		}
-	}
-
-	// 4. Búsqueda por body del response (cuarta prioridad)
-	if criteria.Body != "" && (bestMatch == nil || currentScore < 40) {
-		query := `
-			SELECT r.id, r.method, r.url, r.headers, r.body, res.status_code, res.body as response_body
-			FROM proxy_requests r
-			LEFT JOIN proxy_responses res ON r.id = res.request_id
-			WHERE res.body LIKE ?
-		`
-
-		rows, err := db.Query(query, "%"+criteria.Body+"%")
-		if err != nil {
-			return nil, fmt.Errorf("error searching by response body: %v", err)
-		}
-		defer rows.Close()
-
-		for rows.Next() {
-			var requestID int64
-			var method, url, headers, body, responseBody string
-			var statusCode int
-
-			err := rows.Scan(&requestID, &method, &url, &headers, &body, &statusCode, &responseBody)
-			if err != nil {
-				continue
-			}
-
-			score := 40 // Puntuación para response body
-			if bestMatch == nil || score > currentScore {
-				bestMatch = &BestMatch{
-					Endpoint:   extractEndpoint(url),
-					Headers:    parseHeaders(headers),
-					Body:       responseBody,
-					StatusCode: statusCode,
-					Score:      score,
-					Method:     method,
-					URL:        url,
-				}
-				currentScore = score
-			}
-		}
-	}
-
-	// 5. Búsqueda por headers (quinta prioridad)
-	if len(criteria.Headers) > 0 && (bestMatch == nil || currentScore < 20) {
-		for headerKey, headerValue := range criteria.Headers {
-			query := `
-				SELECT r.id, r.method, r.url, r.headers, r.body, res.status_code, res.body as response_body
-				FROM proxy_requests r
-				LEFT JOIN proxy_responses res ON r.id = res.request_id
-				WHERE r.headers LIKE ?
-			`
-
-			searchPattern := "%\"" + headerKey + "\":\"" + headerValue + "\"%"
-			rows, err := db.Query(query, searchPattern)
-			if err != nil {
-				continue
-			}
-			defer rows.Close()
-
-			for rows.Next() {
-				var requestID int64
-				var method, url, headers, body, responseBody string
-				var statusCode int
-
-				err := rows.Scan(&requestID, &method, &url, &headers, &body, &statusCode, &responseBody)
-				if err != nil {
-					continue
-				}
-
-				score := 20 // Puntuación para headers
-				if bestMatch == nil || score > currentScore {
-					bestMatch = &BestMatch{
-						Endpoint:   extractEndpoint(url),
-						Headers:    parseHeaders(headers),
-						Body:       responseBody,
-						StatusCode: statusCode,
-						Score:      score,
-						Method:     method,
-						URL:        url,
-					}
-					currentScore = score
-				}
-			}
-		}
-	}
-
-	// 6. Búsqueda por method (menor prioridad)
-	if criteria.Method != "" && (bestMatch == nil || currentScore < 10) {
-		query := `
-			SELECT r.id, r.method, r.url, r.headers, r.body, res.status_code, res.body as response_body
-			FROM proxy_requests r
-			LEFT JOIN proxy_responses res ON r.id = res.request_id
-			WHERE r.method = ?
-		`
-
-		rows, err := db.Query(query, criteria.Method)
-		if err != nil {
-			return nil, fmt.Errorf("error searching by method: %v", err)
-		}
-		defer rows.Close()
-
-		for rows.Next() {
-			var requestID int64
-			var method, url, headers, body, responseBody string
-			var statusCode int
-
-			err := rows.Scan(&requestID, &method, &url, &headers, &body, &statusCode, &responseBody)
-			if err != nil {
-				continue
-			}
-
-			score := 10 // Puntuación mínima para method
-			if bestMatch == nil || score > currentScore {
-				bestMatch = &BestMatch{
-					Endpoint:   extractEndpoint(url),
-					Headers:    parseHeaders(headers),
-					Body:       responseBody,
-					StatusCode: statusCode,
-					Score:      score,
-					Method:     method,
-					URL:        url,
-				}
-				currentScore = score
-			}
-		}
-	}
-
-	return bestMatch, nil
+	// No se encontró ningún resultado
+	return nil, nil
 }
 
-// extractEndpoint extrae el endpoint de una URL completa o path
+// GetSimilarRequests obtiene múltiples requests similares (máximo 10)
+func GetSimilarRequests(db *sql.DB, criteria SearchCriteria) ([]BestMatch, error) {
+	if criteria.Endpoint == "" || criteria.Method == "" {
+		return nil, nil
+	}
+
+	query := `SELECT r.id, r.method, r.url, r.headers, r.body, res.status_code, res.body as response_body
+			  FROM proxy_requests r LEFT JOIN proxy_responses res ON r.id = res.request_id
+			  WHERE r.url LIKE ? AND r.method = ? ORDER BY r.timestamp DESC LIMIT 10`
+
+	rows, err := db.Query(query, "%"+criteria.Endpoint+"%", criteria.Method)
+	if err != nil {
+		return nil, fmt.Errorf("error searching similar requests: %v", err)
+	}
+	defer rows.Close()
+
+	var matches []BestMatch
+	for rows.Next() {
+		var requestID int64
+		var method, url, headers, body, responseBody string
+		var statusCode int
+
+		if err := rows.Scan(&requestID, &method, &url, &headers, &body, &statusCode, &responseBody); err != nil {
+			continue
+		}
+
+		matches = append(matches, BestMatch{
+			Endpoint:   extractEndpoint(url),
+			Headers:    parseHeaders(headers),
+			Body:       responseBody,
+			StatusCode: statusCode,
+			Score:      100,
+			Method:     method,
+			URL:        url,
+		})
+	}
+
+	return matches, nil
+}
+
+// Función genérica para ejecutar búsquedas
+func executeSearch(db *sql.DB, query string, args ...interface{}) (*BestMatch, error) {
+	rows, err := db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	if rows.Next() {
+		var requestID int64
+		var method, url, headers, body, responseBody string
+		var statusCode int
+
+		if err := rows.Scan(&requestID, &method, &url, &headers, &body, &statusCode, &responseBody); err != nil {
+			return nil, err
+		}
+
+		return &BestMatch{
+			Endpoint:   extractEndpoint(url),
+			Headers:    parseHeaders(headers),
+			Body:       responseBody,
+			StatusCode: statusCode,
+			Score:      100, // Se ajustará en cada función
+			Method:     method,
+			URL:        url,
+		}, nil
+	}
+
+	return nil, nil
+}
+
+// Función genérica para búsquedas simples
+func searchGeneric(db *sql.DB, criteria SearchCriteria, condition string, args []interface{}, score int) (*BestMatch, error) {
+	query := `SELECT r.id, r.method, r.url, r.headers, r.body, res.status_code, res.body as response_body
+			  FROM proxy_requests r LEFT JOIN proxy_responses res ON r.id = res.request_id WHERE ` + condition
+
+	result, err := executeSearch(db, query, args...)
+	if result != nil {
+		result.Score = score
+	}
+	return result, err
+}
+
+// Funciones de búsqueda ultra-simplificadas
+func searchByURL(db *sql.DB, criteria SearchCriteria) (*BestMatch, error) {
+	if criteria.URL == "" {
+		return nil, nil
+	}
+	return searchGeneric(db, criteria, "r.url = ?", []interface{}{criteria.URL}, 100)
+}
+
+func searchByEndpoint(db *sql.DB, criteria SearchCriteria) (*BestMatch, error) {
+	if criteria.Endpoint == "" {
+		return nil, nil
+	}
+	return searchGeneric(db, criteria, "r.url LIKE ?", []interface{}{"%" + criteria.Endpoint + "%"}, 80)
+}
+
+func searchByRequestBody(db *sql.DB, criteria SearchCriteria) (*BestMatch, error) {
+	if criteria.Body == "" {
+		return nil, nil
+	}
+	return searchGeneric(db, criteria, "r.body LIKE ?", []interface{}{"%" + criteria.Body + "%"}, 60)
+}
+
+func searchByResponseBody(db *sql.DB, criteria SearchCriteria) (*BestMatch, error) {
+	if criteria.Body == "" {
+		return nil, nil
+	}
+	return searchGeneric(db, criteria, "res.body LIKE ?", []interface{}{"%" + criteria.Body + "%"}, 40)
+}
+
+func searchByHeaders(db *sql.DB, criteria SearchCriteria) (*BestMatch, error) {
+	if len(criteria.Headers) == 0 {
+		return nil, nil
+	}
+
+	query := `SELECT r.id, r.method, r.url, r.headers, r.body, res.status_code, res.body as response_body
+			  FROM proxy_requests r LEFT JOIN proxy_responses res ON r.id = res.request_id WHERE r.headers LIKE ?`
+
+	for headerKey, headerValue := range criteria.Headers {
+		searchPattern := "%\"" + headerKey + "\":\"" + headerValue + "\"%"
+		result, err := executeSearch(db, query, searchPattern)
+		if result != nil {
+			result.Score = 20
+			return result, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return nil, nil
+}
+
+func searchByMethod(db *sql.DB, criteria SearchCriteria) (*BestMatch, error) {
+	if criteria.Method == "" {
+		return nil, nil
+	}
+	return searchGeneric(db, criteria, "r.method = ?", []interface{}{criteria.Method}, 10)
+}
+
+// Funciones utilitarias simplificadas
 func extractEndpoint(url string) string {
-	// Si la URL ya empieza con "/", es un path directo
 	if strings.HasPrefix(url, "/") {
 		return url
 	}
 
-	// Remover protocolo si existe
-	if strings.HasPrefix(url, "http://") {
-		url = strings.TrimPrefix(url, "http://")
-	} else if strings.HasPrefix(url, "https://") {
-		url = strings.TrimPrefix(url, "https://")
+	// Remover protocolo
+	url = strings.TrimPrefix(strings.TrimPrefix(url, "http://"), "https://")
+
+	// Buscar path
+	if slashIndex := strings.Index(url, "/"); slashIndex != -1 {
+		if path := url[slashIndex:]; path != "" {
+			return path
+		}
 	}
 
-	// Buscar la primera barra después del host:puerto
-	slashIndex := strings.Index(url, "/")
-	if slashIndex == -1 {
-		return "/"
-	}
-
-	// Extraer el path completo
-	path := url[slashIndex:]
-
-	// Si el path está vacío, retornar "/"
-	if path == "" {
-		return "/"
-	}
-
-	return path
+	return "/"
 }
 
-// parseHeaders convierte el string JSON de headers a map
 func parseHeaders(headersJSON string) map[string]string {
 	headers := make(map[string]string)
 	if headersJSON != "" {
