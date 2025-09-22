@@ -53,7 +53,8 @@ func MockingbirdProxy(db *sql.DB, c *gin.Context) {
 	switch {
 	case strings.Contains(path, "/auth"):
 		targetPort = "8086"
-
+	case strings.Contains(path, "/hi"):
+		targetPort = "8101" // Movido antes que /hello
 	case strings.HasPrefix(path, "/jsonplaceholder"):
 		targetPort = "8080"
 	case strings.Contains(path, "/hello"):
@@ -64,8 +65,6 @@ func MockingbirdProxy(db *sql.DB, c *gin.Context) {
 		targetPort = "8080"
 	case strings.HasPrefix(path, "/api"):
 		targetPort = "8081" // API con HTTP
-	case strings.Contains(path, "/hi"):
-		targetPort = "8101"
 	default:
 		targetPort = "8080" // Default
 	}
