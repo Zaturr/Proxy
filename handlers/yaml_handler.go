@@ -9,7 +9,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// SearchConfigHandler maneja la generación de configuración YAML
 func SearchConfigHandler(db *sql.DB, c *gin.Context) {
 	var criteria database.SearchCriteria
 
@@ -18,13 +17,11 @@ func SearchConfigHandler(db *sql.DB, c *gin.Context) {
 		return
 	}
 
-	// Usar la función centralizada para generar YAML
 	yamlString, err := yaml.GenerateYAMLFromDB(db, criteria.Endpoint, criteria.Method)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Retornar el YAML como string
 	c.JSON(http.StatusOK, gin.H{"yaml": yamlString})
 }

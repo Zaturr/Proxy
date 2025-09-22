@@ -27,7 +27,6 @@ type ProxyTransaction struct {
 	Response ProxyResponse `json:"response"`
 }
 
-// BestMatch representa el mejor candidato encontrado en la búsqueda jerárquica
 type BestMatch struct {
 	Endpoint   string            `json:"endpoint"`
 	Headers    map[string]string `json:"headers"`
@@ -38,7 +37,6 @@ type BestMatch struct {
 	URL        string            `json:"url"`
 }
 
-// SearchCriteria representa los criterios de búsqueda
 type SearchCriteria struct {
 	URL      string            `json:"url"`
 	Endpoint string            `json:"endpoint"`
@@ -47,17 +45,14 @@ type SearchCriteria struct {
 	Method   string            `json:"method"`
 }
 
-// MockingbirdConfig representa la estructura completa de configuración de Mockingbird
 type MockingbirdConfig struct {
 	HTTP HTTPConfig `yaml:"http"`
 }
 
-// HTTPConfig representa la configuración HTTP
 type HTTPConfig struct {
 	Servers []ServerConfig `yaml:"servers"`
 }
 
-// ServerConfig representa la configuración de un servidor
 type ServerConfig struct {
 	Listen     int              `yaml:"listen"`
 	Logger     bool             `yaml:"logger"`
@@ -67,7 +62,6 @@ type ServerConfig struct {
 	Location   []LocationConfig `yaml:"location"`
 }
 
-// LocationConfig representa la configuración de una ubicación/endpoint
 type LocationConfig struct {
 	Path       string            `yaml:"path"`
 	Method     string            `yaml:"method"`

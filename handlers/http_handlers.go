@@ -16,6 +16,20 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func getTargetProtocol(port string) string {
+
+	httpsPorts := map[string]bool{
+		"8086": true,
+		"8443": true,
+		"443":  true,
+	}
+
+	if httpsPorts[port] {
+		return "https"
+	}
+	return "http"
+}
+
 func ProxyHandler(c *gin.Context) {
 	targetURL := c.Query("url")
 	if targetURL == "" {
@@ -37,20 +51,29 @@ func MockingbirdProxy(db *sql.DB, c *gin.Context) {
 
 	var targetPort string
 	switch {
+	case strings.Contains(path, "/auth"):
+		targetPort = "8086"
+
 	case strings.HasPrefix(path, "/jsonplaceholder"):
+		targetPort = "8080"
+	case strings.Contains(path, "/hello"):
+		targetPort = "8080"
+	case strings.Contains(path, "/echo"):
 		targetPort = "8080"
 	case strings.Contains(path, "/callback"):
 		targetPort = "8080"
-	case strings.Contains(path, "/auth"):
-		targetPort = "8086"
-	case strings.Contains(path, "/api"):
-		targetPort = "8081"
+	case strings.HasPrefix(path, "/api"):
+		targetPort = "8081" // API con HTTP
+	case strings.Contains(path, "/hi"):
+		targetPort = "8101"
 	default:
 		targetPort = "8080" // Default
 	}
 
-	targetURL := "http://localhost" + ":" + targetPort
-	fmt.Printf("Path: %s, Target Port: %s, Target URL: %s\n", path, targetPort, targetURL)
+	// Determinar protocolo automáticamente según el puerto
+	protocol := getTargetProtocol(targetPort)
+	targetURL := protocol + "://localhost:" + targetPort
+	fmt.Printf("Path: %s, Target Port: %s, Protocol: %s, Target URL: %s\n", path, targetPort, protocol, targetURL)
 	remote, _ := url.Parse(targetURL)
 
 	proxy := &httputil.ReverseProxy{
@@ -60,7 +83,7 @@ func MockingbirdProxy(db *sql.DB, c *gin.Context) {
 			body, err := io.ReadAll(r.In.Body)
 
 			if err != nil {
-				fmt.Errorf("Error %s", err.Error())
+				fmt.Printf("Error reading body: %s\n", err.Error())
 			}
 			// Guardar request en base de datos
 			headersJSON, _ := json.Marshal(r.In.Header)
@@ -71,7 +94,7 @@ func MockingbirdProxy(db *sql.DB, c *gin.Context) {
 			fmt.Printf("Calling generateYAMLAutomatically for %s %s\n", r.In.Method, r.In.URL.Path)
 			go generateYAMLAutomatically(db, r.In.URL.Path, r.In.Method)
 
-			fmt.Println("%s", body)
+			fmt.Printf("Request body: %s\n", body)
 			r.Out.Body = io.NopCloser(bytes.NewBuffer(body))
 		},
 		ModifyResponse: func(r *http.Response) error {
@@ -87,13 +110,13 @@ func MockingbirdProxy(db *sql.DB, c *gin.Context) {
 				database.InsertResponse(db, requestID.(int64), r.StatusCode, string(headersJSON), string(body))
 			}
 
-			fmt.Println("%s", body)
+			fmt.Printf("Request body: %s\n", body)
 			r.Body = io.NopCloser(bytes.NewBuffer(body))
 			return nil
 		},
 	}
 
-	// Hacer proxy (si no hay servidor de destino, devolverá 404)
+	//si no hay servidor de destino devolverá 404
 	proxy.ServeHTTP(c.Writer, c.Request)
 }
 
@@ -134,26 +157,21 @@ func generateYAMLAutomatically(db *sql.DB, path, method string) {
 }
 
 // simulateResponse simula una respuesta cuando no hay servidor de destino
-func simulateResponse(db *sql.DB, c *gin.Context) {
-	// Guardar request en base de datos
+func SimulateResponse(db *sql.DB, c *gin.Context) {
 	headersJSON, _ := json.Marshal(c.Request.Header)
 	body, _ := io.ReadAll(c.Request.Body)
 	requestID, _ := database.InsertRequest(db, c.Request.Method, c.Request.URL.String(), string(headersJSON), string(body))
 
-	// Simular respuesta
 	responseBody := `{"message": "Simulated response", "status": "ok"}`
 	responseHeaders := map[string]string{
 		"Content-Type": "application/json",
 	}
 
-	// Guardar response simulado
 	responseHeadersJSON, _ := json.Marshal(responseHeaders)
 	database.InsertResponse(db, requestID, 200, string(responseHeadersJSON), responseBody)
 
-	// Generar YAML automáticamente
 	go generateYAMLAutomatically(db, c.Request.URL.Path, c.Request.Method)
 
-	// Enviar respuesta al cliente
 	c.Header("Content-Type", "application/json")
 	c.JSON(200, gin.H{
 		"message": "Simulated response",

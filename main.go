@@ -10,7 +10,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Wrapper functions para mantener compatibilidad con las rutas
 func MockingbirdProxyWrapper(c *gin.Context) {
 	handlers.MockingbirdProxy(db, c)
 }
@@ -23,12 +22,9 @@ func SearchConfigHandlerWrapper(c *gin.Context) {
 	handlers.SearchConfigHandler(db, c)
 }
 
-// DataHandlerWrapper ya no es necesario - sistema completamente dinámico
-
 var db *sql.DB
 
 func main() {
-	// Inicializar base de datos
 	var err error
 	db, err = database.InitDB("./database/proxy.db")
 	if err != nil {
@@ -50,11 +46,9 @@ func main() {
 		c.Next()
 	})
 
-	// Rutas para Mockingbird (catch-all que captura TODO)
 	r.Any("/*path", func(c *gin.Context) {
 		path := c.Request.URL.Path
 
-		// Solo manejar rutas de administración específicas
 		if path == "/api/search" && c.Request.Method == "POST" {
 			SearchHandlerWrapper(c)
 			return

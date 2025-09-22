@@ -42,6 +42,9 @@ func InitDB(dbPath string) (*sql.DB, error) {
 	CREATE INDEX IF NOT EXISTS idx_requests_timestamp ON proxy_requests(timestamp);
 	CREATE INDEX IF NOT EXISTS idx_responses_request_id ON proxy_responses(request_id);
 	CREATE INDEX IF NOT EXISTS idx_responses_timestamp ON proxy_responses(timestamp);
+	CREATE INDEX IF NOT EXISTS idx_requests_method ON proxy_requests(method);
+	CREATE INDEX IF NOT EXISTS idx_requests_url ON proxy_requests(url);
+	CREATE INDEX IF NOT EXISTS idx_requests_method_url ON proxy_requests(method, url);
 	`
 
 	if _, err := db.Exec(createRequestsTable); err != nil {

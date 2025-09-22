@@ -1,11 +1,13 @@
 package build
 
 import (
-	"strconv"
 	"strings"
 
 	"proxy/database"
 )
+
+// ProxyPort es el puerto donde corre el proxy (debe coincidir con main.go)
+const ProxyPort = 3000
 
 // GenerateMockingbirdConfig genera la configuración de Mockingbird basada en múltiples BestMatch
 func GenerateMockingbirdConfig(matches []database.BestMatch) *database.MockingbirdConfig {
@@ -48,26 +50,18 @@ func createLocationsFromGroups(groups map[string][]database.BestMatch) []databas
 	return locations
 }
 
-// extractHostAndPort extrae el host y puerto de una URL
 func extractHostAndPort(url string) (string, int) {
 	url = strings.TrimPrefix(strings.TrimPrefix(url, "http://"), "https://")
 
 	parts := strings.Split(url, ":")
 	host := parts[0]
 
+	// Limpiar host si tiene path
 	if strings.Contains(host, "/") {
 		host = strings.Split(host, "/")[0]
 	}
 
-	if len(parts) >= 2 {
-		if portStr := strings.Split(parts[1], "/")[0]; portStr != "" {
-			if port, err := strconv.Atoi(portStr); err == nil {
-				return host, port
-			}
-		}
-	}
-
-	return host, 8080
+	return host, ProxyPort
 }
 
 func GroupSimilarRequests(requests []database.BestMatch) map[string][]database.BestMatch {

@@ -158,3 +158,31 @@ func GetRequestsByMethod(db *sql.DB, method string, limit, offset int) ([]ProxyR
 
 	return requests, nil
 }
+
+func GetRequestsByEndpointAndMethod(db *sql.DB, endpoint, method string, limit, offset int) ([]ProxyRequest, error) {
+	query := `
+		SELECT r.id, r.method, r.url, r.headers, r.body, r.timestamp
+		FROM proxy_requests r
+		WHERE r.url LIKE ? AND r.method = ?
+		ORDER BY r.timestamp DESC
+		LIMIT ? OFFSET ?
+	`
+
+	rows, err := db.Query(query, "%"+endpoint+"%", method, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("error querying requests by endpoint and method: %v", err)
+	}
+	defer rows.Close()
+
+	var requests []ProxyRequest
+	for rows.Next() {
+		var request ProxyRequest
+		err := rows.Scan(&request.ID, &request.Method, &request.URL, &request.Headers, &request.Body, &request.Timestamp)
+		if err != nil {
+			return nil, fmt.Errorf("error scanning request: %v", err)
+		}
+		requests = append(requests, request)
+	}
+
+	return requests, nil
+}
