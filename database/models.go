@@ -46,3 +46,33 @@ type SearchCriteria struct {
 	Headers  map[string]string `json:"headers"`
 	Method   string            `json:"method"`
 }
+
+// MockingbirdConfig representa la estructura completa de configuración de Mockingbird
+type MockingbirdConfig struct {
+	HTTP HTTPConfig `yaml:"http"`
+}
+
+// HTTPConfig representa la configuración HTTP
+type HTTPConfig struct {
+	Servers []ServerConfig `yaml:"servers"`
+}
+
+// ServerConfig representa la configuración de un servidor
+type ServerConfig struct {
+	Listen     int              `yaml:"listen"`
+	Logger     bool             `yaml:"logger"`
+	LoggerPath string           `yaml:"logger_path"`
+	Name       string           `yaml:"name"`
+	Version    string           `yaml:"version"`
+	Location   []LocationConfig `yaml:"location"`
+}
+
+// LocationConfig representa la configuración de una ubicación/endpoint
+type LocationConfig struct {
+	Path       string            `yaml:"path"`
+	Method     string            `yaml:"method"`
+	Response   string            `yaml:"response"`
+	StatusCode int               `yaml:"status_code"`
+	Headers    map[string]string `yaml:"headers"`
+	Schema     string            `yaml:"schema,omitempty"`
+}

@@ -28,7 +28,3 @@ func SearchConfigHandler(db *sql.DB, c *gin.Context) {
 	// Retornar el YAML como string
 	c.JSON(http.StatusOK, gin.H{"yaml": yamlString})
 }
-
-// DataHandler ya no es necesario - todas las rutas pasan por MockingbirdProxy dinámicamente
-
-// getUniqueEndpoints ya no es necesario - sistema completamente dinámico

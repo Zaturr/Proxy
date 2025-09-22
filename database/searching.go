@@ -31,11 +31,9 @@ func HierarchicalSearch(db *sql.DB, criteria SearchCriteria) (*BestMatch, error)
 		}
 	}
 
-	// No se encontró ningún resultado
 	return nil, nil
 }
 
-// GetSimilarRequests obtiene múltiples requests similares (máximo 10)
 func GetSimilarRequests(db *sql.DB, criteria SearchCriteria) ([]BestMatch, error) {
 	if criteria.Endpoint == "" || criteria.Method == "" {
 		return nil, nil
@@ -106,7 +104,6 @@ func executeSearch(db *sql.DB, query string, args ...interface{}) (*BestMatch, e
 	return nil, nil
 }
 
-// Función genérica para búsquedas simples
 func searchGeneric(db *sql.DB, criteria SearchCriteria, condition string, args []interface{}, score int) (*BestMatch, error) {
 	query := `SELECT r.id, r.method, r.url, r.headers, r.body, res.status_code, res.body as response_body
 			  FROM proxy_requests r LEFT JOIN proxy_responses res ON r.id = res.request_id WHERE ` + condition

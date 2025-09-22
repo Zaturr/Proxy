@@ -9,6 +9,8 @@ import (
 	"proxy/database"
 	"strings"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 // GenerateYAMLFromDB genera YAML directamente desde la base de datos
@@ -31,10 +33,10 @@ func GenerateYAMLFromDB(db *sql.DB, endpoint, method string) (string, error) {
 		return "", fmt.Errorf("no matching records found")
 	}
 
-	// Convertir a build.BestMatch
-	var buildMatches []build.BestMatch
+	// Convertir a database.BestMatch
+	var buildMatches []database.BestMatch
 	for _, dbMatch := range dbMatches {
-		buildMatches = append(buildMatches, build.BestMatch{
+		buildMatches = append(buildMatches, database.BestMatch{
 			Endpoint:   dbMatch.Endpoint,
 			Headers:    dbMatch.Headers,
 			Body:       dbMatch.Body,
@@ -49,7 +51,7 @@ func GenerateYAMLFromDB(db *sql.DB, endpoint, method string) (string, error) {
 	config := build.GenerateMockingbirdConfig(buildMatches)
 
 	// Convertir a YAML
-	yamlString, err := config.ToYAML()
+	yamlString, err := ToYAML(config)
 	if err != nil {
 		return "", fmt.Errorf("error generating YAML: %v", err)
 	}
@@ -85,4 +87,13 @@ func saveYAMLToFile(yamlString, endpoint, method string) error {
 
 	fmt.Printf("YAML guardado en: %s\n", filepath)
 	return nil
+}
+
+// ToYAML convierte la configuración Mockingbird a formato YAML
+func ToYAML(config *database.MockingbirdConfig) (string, error) {
+	yamlData, err := yaml.Marshal(config)
+	if err != nil {
+		return "", err
+	}
+	return string(yamlData), nil
 }
