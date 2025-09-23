@@ -19,7 +19,7 @@ import (
 func getTargetProtocol(port string) string {
 
 	httpsPorts := map[string]bool{
-		"8086": true,
+		// "8086": true,
 		"8443": true,
 		"443":  true,
 	}
