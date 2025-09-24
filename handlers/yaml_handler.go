@@ -3,8 +3,8 @@ package handlers
 import (
 	"database/sql"
 	"net/http"
+	yaml "proxy/data"
 	"proxy/database"
-	"proxy/yaml"
 
 	"github.com/gin-gonic/gin"
 )

@@ -22,6 +22,14 @@ func SearchConfigHandlerWrapper(c *gin.Context) {
 	handlers.SearchConfigHandler(db, c)
 }
 
+func StatsHandlerWrapper(c *gin.Context) {
+	handlers.StatsHandler(db, c)
+}
+
+func CountHandlerWrapper(c *gin.Context) {
+	handlers.CountHandler(db, c)
+}
+
 var db *sql.DB
 
 func main() {
@@ -55,6 +63,14 @@ func main() {
 		}
 		if path == "/api/search/config" && c.Request.Method == "POST" {
 			SearchConfigHandlerWrapper(c)
+			return
+		}
+		if path == "/api/stats" && c.Request.Method == "GET" {
+			StatsHandlerWrapper(c)
+			return
+		}
+		if path == "/api/count" && c.Request.Method == "GET" {
+			CountHandlerWrapper(c)
 			return
 		}
 		MockingbirdProxyWrapper(c)

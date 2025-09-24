@@ -1,6 +1,7 @@
 package build
 
 import (
+	"fmt"
 	"strings"
 
 	"proxy/database"
@@ -15,19 +16,32 @@ func GenerateMockingbirdConfig(matches []database.BestMatch) *database.Mockingbi
 		return &database.MockingbirdConfig{}
 	}
 
-	host, port := extractHostAndPort(matches[0].URL)
-	locations := createLocationsFromGroups(GroupSimilarRequests(matches))
+	// Agrupar por puerto para crear múltiples servidores
+	portGroups := GroupByPort(matches)
+	var servers []database.ServerConfig
+
+	fmt.Printf("DEBUG: Found %d unique ports in matches\n", len(portGroups))
+	for port, portMatches := range portGroups {
+		fmt.Printf("DEBUG: Port %d has %d matches\n", port, len(portMatches))
+		for i, match := range portMatches {
+			fmt.Printf("DEBUG: Port %d, Match %d: %s %s (Port: %d)\n", port, i, match.Method, match.Endpoint, match.Port)
+		}
+
+		locations := createLocationsFromGroups(GroupSimilarRequests(portMatches))
+
+		servers = append(servers, database.ServerConfig{
+			Listen:     port,
+			Logger:     true,
+			LoggerPath: fmt.Sprintf("./logs/server_%d", port),
+			Name:       fmt.Sprintf("server_%d", port),
+			Version:    "0.0.1",
+			Location:   locations,
+		})
+	}
 
 	return &database.MockingbirdConfig{
 		HTTP: database.HTTPConfig{
-			Servers: []database.ServerConfig{{
-				Listen:     port,
-				Logger:     true,
-				LoggerPath: "./logs/serverA",
-				Name:       host,
-				Version:    "0.0.1",
-				Location:   locations,
-			}},
+			Servers: servers,
 		},
 	}
 }
@@ -62,6 +76,15 @@ func extractHostAndPort(url string) (string, int) {
 	}
 
 	return host, ProxyPort
+}
+
+// GroupByPort agrupa los requests por puerto de destino
+func GroupByPort(requests []database.BestMatch) map[int][]database.BestMatch {
+	groups := make(map[int][]database.BestMatch)
+	for _, request := range requests {
+		groups[request.Port] = append(groups[request.Port], request)
+	}
+	return groups
 }
 
 func GroupSimilarRequests(requests []database.BestMatch) map[string][]database.BestMatch {

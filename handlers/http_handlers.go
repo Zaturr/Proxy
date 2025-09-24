@@ -9,8 +9,9 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	yaml "proxy/data"
 	"proxy/database"
-	"proxy/yaml"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -28,22 +29,6 @@ func getTargetProtocol(port string) string {
 		return "https"
 	}
 	return "http"
-}
-
-func ProxyHandler(c *gin.Context) {
-	targetURL := c.Query("url")
-	if targetURL == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "URL parameter required"})
-		return
-	}
-
-	remote, err := url.Parse(targetURL)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid URL"})
-		return
-	}
-
-	httputil.NewSingleHostReverseProxy(remote).ServeHTTP(c.Writer, c.Request)
 }
 
 func MockingbirdProxy(db *sql.DB, c *gin.Context) {
@@ -86,12 +71,18 @@ func MockingbirdProxy(db *sql.DB, c *gin.Context) {
 			}
 			// Guardar request en base de datos
 			headersJSON, _ := json.Marshal(r.In.Header)
-			requestID, _ := database.InsertRequest(db, r.In.Method, r.In.URL.String(), string(headersJSON), string(body))
+			portInt, _ := strconv.Atoi(targetPort)
+			requestID, _ := database.InsertRequest(db, r.In.Method, r.In.URL.String(), string(headersJSON), string(body), portInt)
 			c.Set("requestID", requestID)
 
 			// Generar YAML automáticamente después de guardar request
-			fmt.Printf("Calling generateYAMLAutomatically for %s %s\n", r.In.Method, r.In.URL.Path)
-			go generateYAMLAutomatically(db, r.In.URL.Path, r.In.Method)
+			fmt.Printf("Calling GenerateYAMLFromDB for %s %s\n", r.In.Method, r.In.URL.Path)
+			go func() {
+				_, err := yaml.GenerateYAMLFromDB(db, r.In.URL.Path, r.In.Method)
+				if err != nil {
+					fmt.Printf("Error generating YAML automatically: %v\n", err)
+				}
+			}()
 
 			fmt.Printf("Request body: %s\n", body)
 			r.Out.Body = io.NopCloser(bytes.NewBuffer(body))
@@ -141,25 +132,35 @@ func SearchHandler(db *sql.DB, c *gin.Context) {
 	c.JSON(http.StatusOK, bestMatch)
 }
 
-// generateYAMLAutomatically genera YAML automáticamente después de cada request
-func generateYAMLAutomatically(db *sql.DB, path, method string) {
-	fmt.Printf("Starting automatic YAML generation for %s %s\n", method, path)
-
-	// Generar YAML para este endpoint
-	_, err := yaml.GenerateYAMLFromDB(db, path, method)
-	if err != nil {
-		fmt.Printf("Error generating YAML automatically: %v\n", err)
-		return
-	}
-
-	fmt.Printf("YAML generated automatically for %s %s\n", method, path)
-}
-
 // simulateResponse simula una respuesta cuando no hay servidor de destino
 func SimulateResponse(db *sql.DB, c *gin.Context) {
 	headersJSON, _ := json.Marshal(c.Request.Header)
 	body, _ := io.ReadAll(c.Request.Body)
-	requestID, _ := database.InsertRequest(db, c.Request.Method, c.Request.URL.String(), string(headersJSON), string(body))
+
+	// Determinar puerto basado en el path (misma lógica que MockingbirdProxy)
+	path := c.Request.URL.Path
+	var targetPort string
+	switch {
+	case strings.Contains(path, "/auth"):
+		targetPort = "8086"
+	case strings.Contains(path, "/hi"):
+		targetPort = "8101"
+	case strings.HasPrefix(path, "/jsonplaceholder"):
+		targetPort = "8080"
+	case strings.Contains(path, "/hello"):
+		targetPort = "8080"
+	case strings.Contains(path, "/echo"):
+		targetPort = "8080"
+	case strings.Contains(path, "/callback"):
+		targetPort = "8080"
+	case strings.HasPrefix(path, "/api"):
+		targetPort = "8081"
+	default:
+		targetPort = "8080"
+	}
+
+	portInt, _ := strconv.Atoi(targetPort)
+	requestID, _ := database.InsertRequest(db, c.Request.Method, c.Request.URL.String(), string(headersJSON), string(body), portInt)
 
 	responseBody := `{"message": "Simulated response", "status": "ok"}`
 	responseHeaders := map[string]string{
@@ -169,7 +170,12 @@ func SimulateResponse(db *sql.DB, c *gin.Context) {
 	responseHeadersJSON, _ := json.Marshal(responseHeaders)
 	database.InsertResponse(db, requestID, 200, string(responseHeadersJSON), responseBody)
 
-	go generateYAMLAutomatically(db, c.Request.URL.Path, c.Request.Method)
+	go func() {
+		_, err := yaml.GenerateYAMLFromDB(db, c.Request.URL.Path, c.Request.Method)
+		if err != nil {
+			fmt.Printf("Error generating YAML automatically: %v\n", err)
+		}
+	}()
 
 	c.Header("Content-Type", "application/json")
 	c.JSON(200, gin.H{
@@ -178,4 +184,57 @@ func SimulateResponse(db *sql.DB, c *gin.Context) {
 		"path":    c.Request.URL.Path,
 		"method":  c.Request.Method,
 	})
+}
+
+// StatsHandler maneja las estadísticas de requests
+func StatsHandler(db *sql.DB, c *gin.Context) {
+	stats, err := yaml.GetRequestStats(db)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get stats"})
+		return
+	}
+
+	c.JSON(http.StatusOK, stats)
+}
+
+// CountHandler maneja los conteos específicos
+func CountHandler(db *sql.DB, c *gin.Context) {
+	countType := c.Query("type")
+
+	switch countType {
+	case "approved":
+		counts, err := yaml.CountApprovedRequests(db)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to count approved requests"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"approved_requests": counts})
+
+	case "rejected":
+		counts, err := yaml.CountRejectedRequests(db)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to count rejected requests"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"rejected_requests": counts})
+
+	case "yaml_paths":
+		paths, err := yaml.GetUniquePathsForYAML(db)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get YAML paths"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"yaml_paths": paths})
+
+	case "error_paths":
+		paths, err := yaml.GetErrorPathsForChaosInjection(db)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get error paths"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"error_paths": paths})
+
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid count type. Use: approved, rejected, yaml_paths, error_paths"})
+	}
 }

@@ -34,12 +34,53 @@ func HierarchicalSearch(db *sql.DB, criteria SearchCriteria) (*BestMatch, error)
 	return nil, nil
 }
 
+// GetAllRequestsForYAML obtiene todos los requests para generar configuración YAML
+func GetAllRequestsForYAML(db *sql.DB) ([]BestMatch, error) {
+	query := `SELECT r.id, r.method, r.url, r.headers, r.body, COALESCE(r.port, 8080) as port, res.status_code, res.body as response_body
+			  FROM proxy_requests r LEFT JOIN proxy_responses res ON r.id = res.request_id
+			  WHERE res.status_code BETWEEN 100 AND 299
+			  ORDER BY r.timestamp DESC`
+
+	rows, err := db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("error querying all requests: %v", err)
+	}
+	defer rows.Close()
+
+	var matches []BestMatch
+	for rows.Next() {
+		var requestID int64
+		var method, url, headers, body, responseBody string
+		var statusCode, port int
+
+		if err := rows.Scan(&requestID, &method, &url, &headers, &body, &port, &statusCode, &responseBody); err != nil {
+			continue
+		}
+
+		endpoint := extractEndpoint(url)
+		fmt.Printf("DEBUG: Found request - Method: %s, URL: %s, Endpoint: %s, Port: %d\n", method, url, endpoint, port)
+
+		matches = append(matches, BestMatch{
+			Endpoint:   endpoint,
+			Headers:    parseHeaders(headers),
+			Body:       responseBody,
+			StatusCode: statusCode,
+			Score:      100,
+			Method:     method,
+			URL:        url,
+			Port:       port,
+		})
+	}
+
+	return matches, nil
+}
+
 func GetSimilarRequests(db *sql.DB, criteria SearchCriteria) ([]BestMatch, error) {
 	if criteria.Endpoint == "" || criteria.Method == "" {
 		return nil, nil
 	}
 
-	query := `SELECT r.id, r.method, r.url, r.headers, r.body, res.status_code, res.body as response_body
+	query := `SELECT r.id, r.method, r.url, r.headers, r.body, COALESCE(r.port, 8080) as port, res.status_code, res.body as response_body
 			  FROM proxy_requests r LEFT JOIN proxy_responses res ON r.id = res.request_id
 			  WHERE r.url LIKE ? AND r.method = ? ORDER BY r.timestamp DESC LIMIT 10`
 
@@ -53,9 +94,9 @@ func GetSimilarRequests(db *sql.DB, criteria SearchCriteria) ([]BestMatch, error
 	for rows.Next() {
 		var requestID int64
 		var method, url, headers, body, responseBody string
-		var statusCode int
+		var statusCode, port int
 
-		if err := rows.Scan(&requestID, &method, &url, &headers, &body, &statusCode, &responseBody); err != nil {
+		if err := rows.Scan(&requestID, &method, &url, &headers, &body, &port, &statusCode, &responseBody); err != nil {
 			continue
 		}
 
@@ -67,6 +108,7 @@ func GetSimilarRequests(db *sql.DB, criteria SearchCriteria) ([]BestMatch, error
 			Score:      100,
 			Method:     method,
 			URL:        url,
+			Port:       port,
 		})
 	}
 
@@ -84,9 +126,9 @@ func executeSearch(db *sql.DB, query string, args ...interface{}) (*BestMatch, e
 	if rows.Next() {
 		var requestID int64
 		var method, url, headers, body, responseBody string
-		var statusCode int
+		var statusCode, port int
 
-		if err := rows.Scan(&requestID, &method, &url, &headers, &body, &statusCode, &responseBody); err != nil {
+		if err := rows.Scan(&requestID, &method, &url, &headers, &body, &port, &statusCode, &responseBody); err != nil {
 			return nil, err
 		}
 
@@ -98,6 +140,7 @@ func executeSearch(db *sql.DB, query string, args ...interface{}) (*BestMatch, e
 			Score:      100, // Se ajustará en cada función
 			Method:     method,
 			URL:        url,
+			Port:       port,
 		}, nil
 	}
 
@@ -105,7 +148,7 @@ func executeSearch(db *sql.DB, query string, args ...interface{}) (*BestMatch, e
 }
 
 func searchGeneric(db *sql.DB, criteria SearchCriteria, condition string, args []interface{}, score int) (*BestMatch, error) {
-	query := `SELECT r.id, r.method, r.url, r.headers, r.body, res.status_code, res.body as response_body
+	query := `SELECT r.id, r.method, r.url, r.headers, r.body, COALESCE(r.port, 8080) as port, res.status_code, res.body as response_body
 			  FROM proxy_requests r LEFT JOIN proxy_responses res ON r.id = res.request_id WHERE ` + condition
 
 	result, err := executeSearch(db, query, args...)
@@ -149,7 +192,7 @@ func searchByHeaders(db *sql.DB, criteria SearchCriteria) (*BestMatch, error) {
 		return nil, nil
 	}
 
-	query := `SELECT r.id, r.method, r.url, r.headers, r.body, res.status_code, res.body as response_body
+	query := `SELECT r.id, r.method, r.url, r.headers, r.body, COALESCE(r.port, 8080) as port, res.status_code, res.body as response_body
 			  FROM proxy_requests r LEFT JOIN proxy_responses res ON r.id = res.request_id WHERE r.headers LIKE ?`
 
 	for headerKey, headerValue := range criteria.Headers {

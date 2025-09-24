@@ -35,6 +35,7 @@ type BestMatch struct {
 	Score      int               `json:"score"`
 	Method     string            `json:"method"`
 	URL        string            `json:"url"`
+	Port       int               `json:"port"`
 }
 
 type SearchCriteria struct {

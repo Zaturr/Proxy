@@ -7,12 +7,12 @@ import (
 )
 
 // InsertRequest inserta una nueva request en la base de datos
-func InsertRequest(db *sql.DB, method, url, headers, body string) (int64, error) {
+func InsertRequest(db *sql.DB, method, url, headers, body string, port int) (int64, error) {
 	query := `
-		INSERT INTO proxy_requests (method, url, headers, body, timestamp)
-		VALUES (?, ?, ?, ?, ?)
+		INSERT INTO proxy_requests (method, url, headers, body, port, timestamp)
+		VALUES (?, ?, ?, ?, ?, ?)
 	`
-	result, err := db.Exec(query, method, url, headers, body, time.Now())
+	result, err := db.Exec(query, method, url, headers, body, port, time.Now())
 	if err != nil {
 		return 0, fmt.Errorf("error inserting request: %v", err)
 	}
