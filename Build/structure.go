@@ -1,6 +1,7 @@
 package build
 
 import (
+	"database/sql"
 	"fmt"
 	"strings"
 
@@ -11,7 +12,7 @@ import (
 const ProxyPort = 3000
 
 // GenerateMockingbirdConfig genera la configuración de Mockingbird basada en múltiples BestMatch
-func GenerateMockingbirdConfig(matches []database.BestMatch) *database.MockingbirdConfig {
+func GenerateMockingbirdConfig(matches []database.BestMatch, db *sql.DB) *database.MockingbirdConfig {
 	if len(matches) == 0 {
 		return &database.MockingbirdConfig{}
 	}
@@ -20,14 +21,8 @@ func GenerateMockingbirdConfig(matches []database.BestMatch) *database.Mockingbi
 	portGroups := GroupByPort(matches)
 	var servers []database.ServerConfig
 
-	fmt.Printf("DEBUG: Found %d unique ports in matches\n", len(portGroups))
 	for port, portMatches := range portGroups {
-		fmt.Printf("DEBUG: Port %d has %d matches\n", port, len(portMatches))
-		for i, match := range portMatches {
-			fmt.Printf("DEBUG: Port %d, Match %d: %s %s (Port: %d)\n", port, i, match.Method, match.Endpoint, match.Port)
-		}
-
-		locations := createLocationsFromGroups(GroupSimilarRequests(portMatches))
+		locations := createLocationsFromGroups(GroupSimilarRequests(portMatches), db)
 
 		servers = append(servers, database.ServerConfig{
 			Listen:     port,
@@ -47,18 +42,43 @@ func GenerateMockingbirdConfig(matches []database.BestMatch) *database.Mockingbi
 }
 
 // createLocationsFromGroups convierte grupos de requests en LocationConfig
-func createLocationsFromGroups(groups map[string][]database.BestMatch) []database.LocationConfig {
+func createLocationsFromGroups(groups map[string][]database.BestMatch, db *sql.DB) []database.LocationConfig {
 	var locations []database.LocationConfig
 	for _, group := range groups {
 		if len(group) > 0 {
 			first := group[0]
-			locations = append(locations, database.LocationConfig{
-				Path:       first.Endpoint,
-				Method:     first.Method,
-				Response:   first.Body,
-				StatusCode: first.StatusCode,
-				Headers:    first.Headers,
-			})
+
+			// Crear headers sin Content-Type (se maneja por separado)
+			headers := make(map[string]string)
+			if first.Headers != nil {
+				for k, v := range first.Headers {
+					// No incluir Content-Type en headers, se maneja por separado
+					if k != "Content-Type" {
+						headers[k] = v
+					}
+				}
+			}
+
+			location := database.LocationConfig{
+				Path:        first.Endpoint,
+				Method:      first.Method,
+				Response:    first.Body,
+				StatusCode:  first.StatusCode,
+				ContentType: "application/json",
+				Headers:     headers,
+			}
+
+			// El chaos injection es un extra que se agrega al código aprobado
+			// Se calcula basándose en la probabilidad de errores históricos para esta URL
+			probability, errorStatusCode, err := database.CalculateChaosProbability(db, first.URL)
+			if err == nil && probability > 0 {
+				location.ChaosInjection = &database.ChaosInjection{
+					Probability: probability,
+					StatusCode:  errorStatusCode,
+				}
+			}
+
+			locations = append(locations, location)
 		}
 	}
 	return locations
@@ -90,7 +110,8 @@ func GroupByPort(requests []database.BestMatch) map[int][]database.BestMatch {
 func GroupSimilarRequests(requests []database.BestMatch) map[string][]database.BestMatch {
 	groups := make(map[string][]database.BestMatch)
 	for _, request := range requests {
-		key := request.Method + ":" + request.Endpoint
+		// Incluir status code en la clave para separar requests exitosos de los que tienen errores
+		key := request.Method + ":" + request.Endpoint + ":" + fmt.Sprintf("%d", request.StatusCode)
 		groups[key] = append(groups[key], request)
 	}
 	return groups

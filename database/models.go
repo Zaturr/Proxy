@@ -64,10 +64,17 @@ type ServerConfig struct {
 }
 
 type LocationConfig struct {
-	Path       string            `yaml:"path"`
-	Method     string            `yaml:"method"`
-	Response   string            `yaml:"response"`
-	StatusCode int               `yaml:"status_code"`
-	Headers    map[string]string `yaml:"headers"`
-	Schema     string            `yaml:"schema,omitempty"`
+	Path           string            `yaml:"path"`
+	Method         string            `yaml:"method"`
+	Response       string            `yaml:"response"`
+	StatusCode     int               `yaml:"status_code"`
+	ContentType    string            `yaml:"content_type,omitempty"`
+	Headers        map[string]string `yaml:"headers"`
+	Schema         string            `yaml:"schema,omitempty"`
+	ChaosInjection *ChaosInjection   `yaml:"chaos_injection,omitempty"`
+}
+
+type ChaosInjection struct {
+	Probability float64 `yaml:"probability"`
+	StatusCode  int     `yaml:"status_code"`
 }

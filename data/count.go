@@ -145,11 +145,9 @@ func CountApprovedRequests(db *sql.DB) (map[string]int, error) {
 	return counts, nil
 }
 
-// GetRequestStats obtiene estadísticas generales de requests
 func GetRequestStats(db *sql.DB) (map[string]interface{}, error) {
 	stats := make(map[string]interface{})
 
-	// Contar total de requests
 	var totalRequests int
 	err := db.QueryRow("SELECT COUNT(*) FROM proxy_requests").Scan(&totalRequests)
 	if err != nil {
@@ -157,7 +155,6 @@ func GetRequestStats(db *sql.DB) (map[string]interface{}, error) {
 	}
 	stats["total_requests"] = totalRequests
 
-	// Contar total de responses
 	var totalResponses int
 	err = db.QueryRow("SELECT COUNT(*) FROM proxy_responses").Scan(&totalResponses)
 	if err != nil {
@@ -165,7 +162,6 @@ func GetRequestStats(db *sql.DB) (map[string]interface{}, error) {
 	}
 	stats["total_responses"] = totalResponses
 
-	// Contar requests exitosos
 	var successfulRequests int
 	err = db.QueryRow(`
 		SELECT COUNT(*) FROM proxy_requests req
@@ -177,7 +173,6 @@ func GetRequestStats(db *sql.DB) (map[string]interface{}, error) {
 	}
 	stats["successful_requests"] = successfulRequests
 
-	// Contar requests con error
 	var errorRequests int
 	err = db.QueryRow(`
 		SELECT COUNT(*) FROM proxy_requests req
@@ -189,7 +184,6 @@ func GetRequestStats(db *sql.DB) (map[string]interface{}, error) {
 	}
 	stats["error_requests"] = errorRequests
 
-	// Calcular porcentaje de éxito
 	if totalResponses > 0 {
 		successRate := float64(successfulRequests) / float64(totalResponses) * 100
 		stats["success_rate"] = fmt.Sprintf("%.2f%%", successRate)

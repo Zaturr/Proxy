@@ -32,6 +32,7 @@ func InitDB(dbPath string) (*sql.DB, error) {
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		request_id INTEGER NOT NULL,
 		status_code INTEGER NOT NULL,
+		port INTEGER,
 		headers TEXT,
 		body TEXT,
 		timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -41,6 +42,7 @@ func InitDB(dbPath string) (*sql.DB, error) {
 	// Crear índices para mejorar el rendimiento
 	createIndexes := `
 	CREATE INDEX IF NOT EXISTS idx_responses_request_id ON proxy_responses(request_id);
+	CREATE INDEX IF NOT EXISTS idx_responses_port ON proxy_responses(port);
 	CREATE INDEX IF NOT EXISTS idx_requests_method ON proxy_requests(method);
 	CREATE INDEX IF NOT EXISTS idx_requests_url ON proxy_requests(url);
 	CREATE INDEX IF NOT EXISTS idx_requests_port ON proxy_requests(port);
@@ -56,8 +58,11 @@ func InitDB(dbPath string) (*sql.DB, error) {
 	}
 
 	// Migración: agregar columna port si no existe
-	addPortColumn := `ALTER TABLE proxy_requests ADD COLUMN port INTEGER;`
-	db.Exec(addPortColumn) // Ignoramos el error si la columna ya existe
+	addPortColumnRequests := `ALTER TABLE proxy_requests ADD COLUMN port INTEGER;`
+	db.Exec(addPortColumnRequests) // Ignoramos el error si la columna ya existe
+
+	addPortColumnResponses := `ALTER TABLE proxy_responses ADD COLUMN port INTEGER;`
+	db.Exec(addPortColumnResponses) // Ignoramos el error si la columna ya existe
 
 	if _, err := db.Exec(createIndexes); err != nil {
 		return nil, fmt.Errorf("error creating indexes: %v", err)

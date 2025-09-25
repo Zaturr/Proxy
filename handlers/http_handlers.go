@@ -97,7 +97,8 @@ func MockingbirdProxy(db *sql.DB, c *gin.Context) {
 			// Guardar response en base de datos
 			if requestID, exists := c.Get("requestID"); exists {
 				headersJSON, _ := json.Marshal(r.Header)
-				database.InsertResponse(db, requestID.(int64), r.StatusCode, string(headersJSON), string(body))
+				portInt, _ := strconv.Atoi(targetPort)
+				database.InsertResponse(db, requestID.(int64), r.StatusCode, string(headersJSON), string(body), portInt)
 			}
 
 			fmt.Printf("Request body: %s\n", body)
@@ -137,7 +138,7 @@ func SimulateResponse(db *sql.DB, c *gin.Context) {
 	headersJSON, _ := json.Marshal(c.Request.Header)
 	body, _ := io.ReadAll(c.Request.Body)
 
-	// Determinar puerto basado en el path (misma lógica que MockingbirdProxy)
+	// Determinar puerto basado en el path
 	path := c.Request.URL.Path
 	var targetPort string
 	switch {
@@ -168,7 +169,7 @@ func SimulateResponse(db *sql.DB, c *gin.Context) {
 	}
 
 	responseHeadersJSON, _ := json.Marshal(responseHeaders)
-	database.InsertResponse(db, requestID, 200, string(responseHeadersJSON), responseBody)
+	database.InsertResponse(db, requestID, 200, string(responseHeadersJSON), responseBody, portInt)
 
 	go func() {
 		_, err := yaml.GenerateYAMLFromDB(db, c.Request.URL.Path, c.Request.Method)

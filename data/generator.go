@@ -41,7 +41,7 @@ func GenerateYAMLFromDB(db *sql.DB, endpoint, method string) (string, error) {
 	}
 
 	// Generar configuración
-	config := build.GenerateMockingbirdConfig(buildMatches)
+	config := build.GenerateMockingbirdConfig(buildMatches, db)
 
 	// Convertir a YAML
 	yamlString, err := ToYAML(config)
@@ -50,12 +50,9 @@ func GenerateYAMLFromDB(db *sql.DB, endpoint, method string) (string, error) {
 	}
 
 	// Guardar YAML en archivo
-	fmt.Printf("DEBUG: About to save YAML to file\n")
 	if err := saveYAMLToFile(yamlString, endpoint, method); err != nil {
-		fmt.Printf("ERROR: Failed to save YAML to file: %v\n", err)
 		return "", fmt.Errorf("error saving YAML to file: %v", err)
 	}
-	fmt.Printf("DEBUG: YAML saved successfully\n")
 
 	return yamlString, nil
 }
@@ -72,8 +69,6 @@ func saveYAMLToFile(yamlString, endpoint, method string) error {
 
 	// Como ahora generamos configuración completa desde todos los requests,
 	// simplemente reemplazamos el archivo completo
-	fmt.Printf("DEBUG: Saving YAML to file: %s\n", configFile)
-	fmt.Printf("DEBUG: YAML content length: %d\n", len(yamlString))
 	if err := os.WriteFile(configFile, []byte(yamlString), 0644); err != nil {
 		return err
 	}
