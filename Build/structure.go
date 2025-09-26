@@ -41,46 +41,88 @@ func GenerateMockingbirdConfig(matches []database.BestMatch, db *sql.DB) *databa
 	}
 }
 
-// createLocationsFromGroups convierte grupos de requests en LocationConfig
+// createLocationsFromGroups convierte grupos de requests en LocationConfig siguiendo las reglas estrictas
 func createLocationsFromGroups(groups map[string][]database.BestMatch, db *sql.DB) []database.LocationConfig {
 	var locations []database.LocationConfig
+
+	// Agrupar por path+method para manejar múltiples escenarios
+	pathMethodGroups := make(map[string][]database.BestMatch)
 	for _, group := range groups {
 		if len(group) > 0 {
 			first := group[0]
+			key := first.Method + ":" + first.Endpoint
+			pathMethodGroups[key] = append(pathMethodGroups[key], group...)
+		}
+	}
 
-			// Crear headers sin Content-Type (se maneja por separado)
-			headers := make(map[string]string)
-			if first.Headers != nil {
-				for k, v := range first.Headers {
-					// No incluir Content-Type en headers, se maneja por separado
-					if k != "Content-Type" {
-						headers[k] = v
-					}
+	for _, group := range pathMethodGroups {
+		if len(group) == 0 {
+			continue
+		}
+
+		// REGLA 1: Estructura Base (Siempre Presente)
+		// Buscar la respuesta exitosa (status_code < 300) para la estructura base
+		var baseResponse *database.BestMatch
+		var errorResponse *database.BestMatch
+
+		for _, match := range group {
+			if match.StatusCode < 300 {
+				baseResponse = &match
+			} else if match.StatusCode >= 300 && errorResponse == nil {
+				// REGLA 2: Solo tomar el primer código de error encontrado
+				errorResponse = &match
+			}
+		}
+
+		// Si no hay respuesta exitosa, usar la primera disponible
+		if baseResponse == nil {
+			baseResponse = &group[0]
+		}
+
+		// Crear headers sin Content-Type (se maneja por separado)
+		headers := make(map[string]string)
+		if baseResponse.Headers != nil {
+			for k, v := range baseResponse.Headers {
+				// No incluir Content-Type en headers, se maneja por separado
+				if k != "Content-Type" {
+					headers[k] = v
 				}
 			}
+		}
 
-			location := database.LocationConfig{
-				Path:        first.Endpoint,
-				Method:      first.Method,
-				Response:    first.Body,
-				StatusCode:  first.StatusCode,
-				ContentType: "application/json",
-				Headers:     headers,
-			}
+		// Estructura base siempre presente
+		location := database.LocationConfig{
+			Path:        baseResponse.Endpoint,
+			Method:      baseResponse.Method,
+			Response:    baseResponse.Body,
+			StatusCode:  baseResponse.StatusCode, // Código exitoso (ej. 200)
+			ContentType: "application/json",
+			Headers:     headers,
+		}
 
-			// El chaos injection es un extra que se agrega al código aprobado
-			// Se calcula basándose en la probabilidad de errores históricos para esta URL
-			probability, errorStatusCode, err := database.CalculateChaosProbability(db, first.URL)
+		// REGLA 2: Inyección de Caos (Códigos de Error >= 300)
+		// Solo agregar chaos_injection si hay un error >= 300
+		if errorResponse != nil && errorResponse.StatusCode >= 300 {
+			// Calcular probabilidad de caos basada en datos históricos
+			probability, calculatedErrorCode, err := database.CalculateChaosProbability(db, baseResponse.URL)
 			if err == nil && probability > 0 {
 				location.ChaosInjection = &database.ChaosInjection{
 					Probability: probability,
-					StatusCode:  errorStatusCode,
+					StatusCode:  calculatedErrorCode, // Código de error para inyección de caos
+				}
+			} else {
+				// Si no se puede calcular, usar el error encontrado directamente
+				location.ChaosInjection = &database.ChaosInjection{
+					Probability: 0.5, // Probabilidad por defecto
+					StatusCode:  errorResponse.StatusCode,
 				}
 			}
-
-			locations = append(locations, location)
 		}
+		// REGLA 3: Si no hay error >= 300, no se agrega chaos_injection
+
+		locations = append(locations, location)
 	}
+
 	return locations
 }
 

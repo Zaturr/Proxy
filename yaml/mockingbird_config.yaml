@@ -1,15 +1,15 @@
 http:
     servers:
-        - listen: 8081
+        - listen: 8080
           logger: true
-          logger_path: ./logs/server_8081
-          name: server_8081
+          logger_path: ./logs/server_8080
+          name: server_8080
           version: 0.0.1
           location:
-            - path: /api/data
+            - path: /api/hello
               method: GET
-              response: '{"error": "no controlado"}'
-              status_code: 500
+              response: '{"message": "Hello, World!"}'
+              status_code: 200
               content_type: application/json
               headers:
                 Accept: ""
@@ -18,8 +18,54 @@ http:
                 Postman-Token: ""
                 User-Agent: ""
               chaos_injection:
-                probability: 0.8571428571428571
+                probability: 0.4
                 status_code: 500
+            - path: /api/callback
+              method: POST
+              response: '{"message": "Callback ok"}'
+              status_code: 200
+              content_type: application/json
+              headers:
+                Accept: ""
+                Accept-Encoding: ""
+                Connection: ""
+                Content-Length: ""
+                Postman-Token: ""
+                User-Agent: ""
+        - listen: 8086
+          logger: true
+          logger_path: ./logs/server_8086
+          name: server_8086
+          version: 0.0.1
+          location:
+            - path: /api/v1/auth/token
+              method: POST
+              response: |
+                {
+                  "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
+                  "expires_in": 3600,
+                  "refresh_expires_in": 1800,
+                  "refresh_token": "refresh_token_here",
+                  "token_type": "Bearer",
+                  "not_before_policy": 0,
+                  "session_state": "session_state_here",
+                  "scope": "openid profile email"
+                }
+              status_code: 200
+              content_type: application/json
+              headers:
+                Accept: ""
+                Accept-Encoding: ""
+                Connection: ""
+                Content-Length: ""
+                Postman-Token: ""
+                User-Agent: ""
+        - listen: 8081
+          logger: true
+          logger_path: ./logs/server_8081
+          name: server_8081
+          version: 0.0.1
+          location:
             - path: /api/data
               method: GET
               response: '{"data": [1, 2, 3, 4, 5]}'
@@ -32,5 +78,5 @@ http:
                 Postman-Token: ""
                 User-Agent: ""
               chaos_injection:
-                probability: 0.8571428571428571
+                probability: 0.8461538461538461
                 status_code: 500
