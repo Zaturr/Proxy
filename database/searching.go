@@ -17,7 +17,6 @@ const (
 	ScoreMethod       = 10
 )
 
-// Query base para búsquedas
 const baseQuery = `SELECT r.id, r.method, r.url, r.headers, r.body, r.port, res.status_code, res.body as response_body
 				   FROM proxy_requests r LEFT JOIN proxy_responses res ON r.id = res.request_id`
 
@@ -113,7 +112,7 @@ func scanRowToBestMatch(rows *sql.Rows) (*BestMatch, error) {
 		Headers:    parseHeaders(headers),
 		Body:       responseBody,
 		StatusCode: statusCode,
-		Score:      100, // Se ajustará en cada función
+		Score:      100,
 		Method:     method,
 		URL:        url,
 		Port:       port,

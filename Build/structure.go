@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"proxy/database"
+	infra "proxy/database/infraestructure"
 )
 
 // ProxyPort es el puerto donde corre el proxy (debe coincidir con main.go)
@@ -98,7 +99,7 @@ func createLocationsFromGroups(groups map[string][]database.BestMatch, db *sql.D
 
 		if errorResponse != nil && errorResponse.StatusCode >= 300 {
 			// Calcular probabilidad de caos basada en datos históricos
-			probability, calculatedErrorCode, err := database.CalculateChaosProbability(db, baseResponse.URL)
+			probability, calculatedErrorCode, err := infra.CalculateChaosProbability(db, baseResponse.URL)
 			if err == nil && probability > 0 {
 				location.ChaosInjection = &database.ChaosInjection{
 					Probability: probability,

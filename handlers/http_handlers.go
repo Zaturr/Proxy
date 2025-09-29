@@ -11,6 +11,7 @@ import (
 	"net/url"
 	yaml "proxy/data"
 	"proxy/database"
+	infra "proxy/database/infraestructure"
 	"proxy/handlers/port"
 	"strconv"
 
@@ -106,7 +107,7 @@ func (pm *PortMapper) GetTargetProtocol(port string) string {
 
 // LogRequest registra un request en la base de datos
 func (rl *RequestLogger) LogRequest(method, url, headers, body string, port int) (int64, error) {
-	requestID, err := database.InsertRequest(rl.db, method, url, headers, body, port)
+	requestID, err := infra.InsertRequest(rl.db, method, url, headers, body, port)
 	if err != nil {
 		return 0, &ProxyError{Type: "DatabaseInsert", Message: "Failed to insert request", Err: err}
 	}
@@ -115,7 +116,7 @@ func (rl *RequestLogger) LogRequest(method, url, headers, body string, port int)
 
 // LogResponse registra una response en la base de datos
 func (rl *ResponseLogger) LogResponse(requestID int64, statusCode int, headers, body string, port int) error {
-	if err := database.InsertResponse(rl.db, requestID, statusCode, headers, body, port); err != nil {
+	if err := infra.InsertResponse(rl.db, requestID, statusCode, headers, body, port); err != nil {
 		return &ProxyError{Type: "DatabaseInsert", Message: "Failed to insert response", Err: err}
 	}
 	return nil

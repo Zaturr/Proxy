@@ -19,6 +19,16 @@ func GetPortMappings() []PortMapping {
 		{PathPattern: "/echo", MatchType: "contains", Port: "8080"},
 		{PathPattern: "/callback", MatchType: "contains", Port: "8080"},
 		{PathPattern: "/api", MatchType: "prefix", Port: "8081"},
+		{PathPattern: "/check", MatchType: "contains", Port: "3500"},
+		{PathPattern: "/anothrapi", MatchType: "contains", Port: "8082"},
+		{PathPattern: "/ath", MatchType: "contains", Port: "8085"},
+		{PathPattern: "/sycom", MatchType: "contains", Port: "8102"},
+
+		{PathPattern: "/visor/hello", MatchType: "contains", Port: "5090"},
+		{PathPattern: "/visor", MatchType: "contains", Port: "5091"},
+
+		{PathPattern: "/grafana", MatchType: "contains", Port: "3005"},
+		{PathPattern: "/sample", MatchType: "contains", Port: "8101"},
 	}
 }
 
