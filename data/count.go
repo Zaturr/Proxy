@@ -186,9 +186,9 @@ func GetRequestStats(db *sql.DB) (map[string]interface{}, error) {
 
 	if totalResponses > 0 {
 		successRate := float64(successfulRequests) / float64(totalResponses) * 100
-		stats["success_rate"] = fmt.Sprintf("%.2f%%", successRate)
+		stats["success_rate"] = successRate
 	} else {
-		stats["success_rate"] = "0.00%"
+		stats["success_rate"] = 0.0
 	}
 
 	return stats, nil

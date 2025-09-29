@@ -210,7 +210,7 @@ func CalculateChaosProbability(db *sql.DB, url string) (float64, int, error) {
 	}
 
 	// Calcular probabilidad basada en el porcentaje de errores
-	probability := float64(rejectedCount) / float64(totalCount)
+	probability := float64(int(float64(rejectedCount)/float64(totalCount)*100*100)) / 100
 
 	// Obtener el status code más común de error para esta URL
 	errorStatusCode, err := getMostCommonErrorStatusCode(db, url)

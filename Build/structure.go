@@ -17,7 +17,6 @@ func GenerateMockingbirdConfig(matches []database.BestMatch, db *sql.DB) *databa
 		return &database.MockingbirdConfig{}
 	}
 
-	// Agrupar por puerto para crear múltiples servidores
 	portGroups := GroupByPort(matches)
 	var servers []database.ServerConfig
 
@@ -41,7 +40,6 @@ func GenerateMockingbirdConfig(matches []database.BestMatch, db *sql.DB) *databa
 	}
 }
 
-// createLocationsFromGroups convierte grupos de requests en LocationConfig siguiendo las reglas estrictas
 func createLocationsFromGroups(groups map[string][]database.BestMatch, db *sql.DB) []database.LocationConfig {
 	var locations []database.LocationConfig
 
@@ -60,8 +58,6 @@ func createLocationsFromGroups(groups map[string][]database.BestMatch, db *sql.D
 			continue
 		}
 
-		// REGLA 1: Estructura Base (Siempre Presente)
-		// Buscar la respuesta exitosa (status_code < 300) para la estructura base
 		var baseResponse *database.BestMatch
 		var errorResponse *database.BestMatch
 
@@ -69,7 +65,7 @@ func createLocationsFromGroups(groups map[string][]database.BestMatch, db *sql.D
 			if match.StatusCode < 300 {
 				baseResponse = &match
 			} else if match.StatusCode >= 300 && errorResponse == nil {
-				// REGLA 2: Solo tomar el primer código de error encontrado
+
 				errorResponse = &match
 			}
 		}
@@ -100,8 +96,6 @@ func createLocationsFromGroups(groups map[string][]database.BestMatch, db *sql.D
 			Headers:     headers,
 		}
 
-		// REGLA 2: Inyección de Caos (Códigos de Error >= 300)
-		// Solo agregar chaos_injection si hay un error >= 300
 		if errorResponse != nil && errorResponse.StatusCode >= 300 {
 			// Calcular probabilidad de caos basada en datos históricos
 			probability, calculatedErrorCode, err := database.CalculateChaosProbability(db, baseResponse.URL)
@@ -113,12 +107,11 @@ func createLocationsFromGroups(groups map[string][]database.BestMatch, db *sql.D
 			} else {
 				// Si no se puede calcular, usar el error encontrado directamente
 				location.ChaosInjection = &database.ChaosInjection{
-					Probability: 0.5, // Probabilidad por defecto
+					Probability: 50.0, // Probabilidad por defecto (50%)
 					StatusCode:  errorResponse.StatusCode,
 				}
 			}
 		}
-		// REGLA 3: Si no hay error >= 300, no se agrega chaos_injection
 
 		locations = append(locations, location)
 	}
