@@ -1,5 +1,33 @@
 http:
     servers:
+        - listen: 8086
+          logger: true
+          logger_path: ./logs/server_8086
+          name: server_8086
+          version: 0.0.1
+          location:
+            - path: /api/v1/auth/token
+              method: POST
+              response: |
+                {
+                  "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
+                  "expires_in": 3600,
+                  "refresh_expires_in": 1800,
+                  "refresh_token": "refresh_token_here",
+                  "token_type": "Bearer",
+                  "not_before_policy": 0,
+                  "session_state": "session_state_here",
+                  "scope": "openid profile email"
+                }
+              status_code: 200
+              content_type: application/json
+              headers:
+                Accept: ""
+                Accept-Encoding: ""
+                Connection: ""
+                Content-Length: ""
+                Postman-Token: ""
+                User-Agent: ""
         - listen: 8080
           logger: true
           logger_path: ./logs/server_8080
@@ -80,31 +108,3 @@ http:
               chaos_injection:
                 probability: 60.6
                 status_code: 500
-        - listen: 8086
-          logger: true
-          logger_path: ./logs/server_8086
-          name: server_8086
-          version: 0.0.1
-          location:
-            - path: /api/v1/auth/token
-              method: POST
-              response: |
-                {
-                  "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
-                  "expires_in": 3600,
-                  "refresh_expires_in": 1800,
-                  "refresh_token": "refresh_token_here",
-                  "token_type": "Bearer",
-                  "not_before_policy": 0,
-                  "session_state": "session_state_here",
-                  "scope": "openid profile email"
-                }
-              status_code: 200
-              content_type: application/json
-              headers:
-                Accept: ""
-                Accept-Encoding: ""
-                Connection: ""
-                Content-Length: ""
-                Postman-Token: ""
-                User-Agent: ""

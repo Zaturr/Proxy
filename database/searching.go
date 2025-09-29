@@ -7,6 +7,20 @@ import (
 	"strings"
 )
 
+// Constantes para los scores de prioridad
+const (
+	ScoreURL          = 100
+	ScoreEndpoint     = 80
+	ScoreRequestBody  = 60
+	ScoreResponseBody = 40
+	ScoreHeaders      = 20
+	ScoreMethod       = 10
+)
+
+// Query base para búsquedas
+const baseQuery = `SELECT r.id, r.method, r.url, r.headers, r.body, r.port, res.status_code, res.body as response_body
+				   FROM proxy_requests r LEFT JOIN proxy_responses res ON r.id = res.request_id`
+
 // HierarchicalSearch realiza una búsqueda jerárquica en la base de datos
 func HierarchicalSearch(db *sql.DB, criteria SearchCriteria) (*BestMatch, error) {
 	// Lista de funciones de búsqueda en orden de prioridad
@@ -36,40 +50,8 @@ func HierarchicalSearch(db *sql.DB, criteria SearchCriteria) (*BestMatch, error)
 
 // GetAllRequestsForYAML obtiene todos los requests para generar configuración YAML
 func GetAllRequestsForYAML(db *sql.DB) ([]BestMatch, error) {
-	query := `SELECT r.id, r.method, r.url, r.headers, r.body, r.port, res.status_code, res.body as response_body
-			  FROM proxy_requests r LEFT JOIN proxy_responses res ON r.id = res.request_id
-			  WHERE res.status_code IS NOT NULL
-			  ORDER BY r.timestamp DESC`
-
-	rows, err := db.Query(query)
-	if err != nil {
-		return nil, fmt.Errorf("error querying all requests: %v", err)
-	}
-	defer rows.Close()
-
-	var matches []BestMatch
-	for rows.Next() {
-		var requestID int64
-		var method, url, headers, body, responseBody string
-		var statusCode, port int
-
-		if err := rows.Scan(&requestID, &method, &url, &headers, &body, &port, &statusCode, &responseBody); err != nil {
-			continue
-		}
-
-		matches = append(matches, BestMatch{
-			Endpoint:   extractEndpoint(url),
-			Headers:    parseHeaders(headers),
-			Body:       responseBody,
-			StatusCode: statusCode,
-			Score:      100,
-			Method:     method,
-			URL:        url,
-			Port:       port,
-		})
-	}
-
-	return matches, nil
+	query := baseQuery + " WHERE res.status_code IS NOT NULL ORDER BY r.timestamp DESC"
+	return executeMultipleSearch(db, query)
 }
 
 func GetSimilarRequests(db *sql.DB, criteria SearchCriteria) ([]BestMatch, error) {
@@ -77,42 +59,31 @@ func GetSimilarRequests(db *sql.DB, criteria SearchCriteria) ([]BestMatch, error
 		return nil, nil
 	}
 
-	query := `SELECT r.id, r.method, r.url, r.headers, r.body, r.port, res.status_code, res.body as response_body
-			  FROM proxy_requests r LEFT JOIN proxy_responses res ON r.id = res.request_id
-			  WHERE r.url LIKE ? AND r.method = ? ORDER BY r.timestamp DESC LIMIT 10`
+	query := baseQuery + " WHERE r.url LIKE ? AND r.method = ? ORDER BY r.timestamp DESC LIMIT 10"
+	return executeMultipleSearch(db, query, "%"+criteria.Endpoint+"%", criteria.Method)
+}
 
-	rows, err := db.Query(query, "%"+criteria.Endpoint+"%", criteria.Method)
+// executeMultipleSearch ejecuta una consulta que retorna múltiples resultados
+func executeMultipleSearch(db *sql.DB, query string, args ...interface{}) ([]BestMatch, error) {
+	rows, err := db.Query(query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("error searching similar requests: %v", err)
+		return nil, fmt.Errorf("error executing query: %v", err)
 	}
 	defer rows.Close()
 
 	var matches []BestMatch
 	for rows.Next() {
-		var requestID int64
-		var method, url, headers, body, responseBody string
-		var statusCode, port int
-
-		if err := rows.Scan(&requestID, &method, &url, &headers, &body, &port, &statusCode, &responseBody); err != nil {
-			continue
+		match, err := scanRowToBestMatch(rows)
+		if err != nil {
+			continue // Skip errores de parsing individuales
 		}
-
-		matches = append(matches, BestMatch{
-			Endpoint:   extractEndpoint(url),
-			Headers:    parseHeaders(headers),
-			Body:       responseBody,
-			StatusCode: statusCode,
-			Score:      100,
-			Method:     method,
-			URL:        url,
-			Port:       port,
-		})
+		matches = append(matches, *match)
 	}
 
 	return matches, nil
 }
 
-// Función genérica para ejecutar búsquedas
+// Función genérica para ejecutar búsquedas que retornan un solo resultado
 func executeSearch(db *sql.DB, query string, args ...interface{}) (*BestMatch, error) {
 	rows, err := db.Query(query, args...)
 	if err != nil {
@@ -121,32 +92,36 @@ func executeSearch(db *sql.DB, query string, args ...interface{}) (*BestMatch, e
 	defer rows.Close()
 
 	if rows.Next() {
-		var requestID int64
-		var method, url, headers, body, responseBody string
-		var statusCode, port int
-
-		if err := rows.Scan(&requestID, &method, &url, &headers, &body, &port, &statusCode, &responseBody); err != nil {
-			return nil, err
-		}
-
-		return &BestMatch{
-			Endpoint:   extractEndpoint(url),
-			Headers:    parseHeaders(headers),
-			Body:       responseBody,
-			StatusCode: statusCode,
-			Score:      100, // Se ajustará en cada función
-			Method:     method,
-			URL:        url,
-			Port:       port,
-		}, nil
+		return scanRowToBestMatch(rows)
 	}
 
 	return nil, nil
 }
 
+// scanRowToBestMatch convierte una fila de la base de datos a BestMatch
+func scanRowToBestMatch(rows *sql.Rows) (*BestMatch, error) {
+	var requestID int64
+	var method, url, headers, body, responseBody string
+	var statusCode, port int
+
+	if err := rows.Scan(&requestID, &method, &url, &headers, &body, &port, &statusCode, &responseBody); err != nil {
+		return nil, err
+	}
+
+	return &BestMatch{
+		Endpoint:   extractEndpoint(url),
+		Headers:    parseHeaders(headers),
+		Body:       responseBody,
+		StatusCode: statusCode,
+		Score:      100, // Se ajustará en cada función
+		Method:     method,
+		URL:        url,
+		Port:       port,
+	}, nil
+}
+
 func searchGeneric(db *sql.DB, criteria SearchCriteria, condition string, args []interface{}, score int) (*BestMatch, error) {
-	query := `SELECT r.id, r.method, r.url, r.headers, r.body, r.port, res.status_code, res.body as response_body
-			  FROM proxy_requests r LEFT JOIN proxy_responses res ON r.id = res.request_id WHERE ` + condition
+	query := baseQuery + " WHERE " + condition
 
 	result, err := executeSearch(db, query, args...)
 	if result != nil {
@@ -160,28 +135,28 @@ func searchByURL(db *sql.DB, criteria SearchCriteria) (*BestMatch, error) {
 	if criteria.URL == "" {
 		return nil, nil
 	}
-	return searchGeneric(db, criteria, "r.url = ?", []interface{}{criteria.URL}, 100)
+	return searchGeneric(db, criteria, "r.url = ?", []interface{}{criteria.URL}, ScoreURL)
 }
 
 func searchByEndpoint(db *sql.DB, criteria SearchCriteria) (*BestMatch, error) {
 	if criteria.Endpoint == "" {
 		return nil, nil
 	}
-	return searchGeneric(db, criteria, "r.url LIKE ?", []interface{}{"%" + criteria.Endpoint + "%"}, 80)
+	return searchGeneric(db, criteria, "r.url LIKE ?", []interface{}{"%" + criteria.Endpoint + "%"}, ScoreEndpoint)
 }
 
 func searchByRequestBody(db *sql.DB, criteria SearchCriteria) (*BestMatch, error) {
 	if criteria.Body == "" {
 		return nil, nil
 	}
-	return searchGeneric(db, criteria, "r.body LIKE ?", []interface{}{"%" + criteria.Body + "%"}, 60)
+	return searchGeneric(db, criteria, "r.body LIKE ?", []interface{}{"%" + criteria.Body + "%"}, ScoreRequestBody)
 }
 
 func searchByResponseBody(db *sql.DB, criteria SearchCriteria) (*BestMatch, error) {
 	if criteria.Body == "" {
 		return nil, nil
 	}
-	return searchGeneric(db, criteria, "res.body LIKE ?", []interface{}{"%" + criteria.Body + "%"}, 40)
+	return searchGeneric(db, criteria, "res.body LIKE ?", []interface{}{"%" + criteria.Body + "%"}, ScoreResponseBody)
 }
 
 func searchByHeaders(db *sql.DB, criteria SearchCriteria) (*BestMatch, error) {
@@ -189,14 +164,13 @@ func searchByHeaders(db *sql.DB, criteria SearchCriteria) (*BestMatch, error) {
 		return nil, nil
 	}
 
-	query := `SELECT r.id, r.method, r.url, r.headers, r.body, r.port, res.status_code, res.body as response_body
-			  FROM proxy_requests r LEFT JOIN proxy_responses res ON r.id = res.request_id WHERE r.headers LIKE ?`
+	query := baseQuery + " WHERE r.headers LIKE ?"
 
 	for headerKey, headerValue := range criteria.Headers {
 		searchPattern := "%\"" + headerKey + "\":\"" + headerValue + "\"%"
 		result, err := executeSearch(db, query, searchPattern)
 		if result != nil {
-			result.Score = 20
+			result.Score = ScoreHeaders
 			return result, nil
 		}
 		if err != nil {
@@ -211,7 +185,7 @@ func searchByMethod(db *sql.DB, criteria SearchCriteria) (*BestMatch, error) {
 	if criteria.Method == "" {
 		return nil, nil
 	}
-	return searchGeneric(db, criteria, "r.method = ?", []interface{}{criteria.Method}, 10)
+	return searchGeneric(db, criteria, "r.method = ?", []interface{}{criteria.Method}, ScoreMethod)
 }
 
 // Funciones utilitarias simplificadas
