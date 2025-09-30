@@ -24,13 +24,28 @@ func GenerateMockingbirdConfig(matches []database.BestMatch, db *sql.DB) *databa
 	for port, portMatches := range portGroups {
 		locations := createLocationsFromGroups(GroupSimilarRequests(portMatches), db)
 
+		// Calcular ChaosInjection a nivel de servidor
+		var chaosInjection *database.ChaosInjection
+		if len(portMatches) > 0 {
+			// Usar el primer match para calcular la probabilidad de caos
+			firstMatch := portMatches[0]
+			probability, calculatedErrorCode, err := infra.CalculateChaosProbability(db, firstMatch.URL)
+			if err == nil && probability > 0 {
+				chaosInjection = &database.ChaosInjection{
+					Probability: probability,
+					StatusCode:  calculatedErrorCode,
+				}
+			}
+		}
+
 		servers = append(servers, database.ServerConfig{
-			Listen:     port,
-			Logger:     true,
-			LoggerPath: fmt.Sprintf("./logs/server_%d", port),
-			Name:       fmt.Sprintf("server_%d", port),
-			Version:    "0.0.1",
-			Location:   locations,
+			Listen:         port,
+			Logger:         true,
+			LoggerPath:     fmt.Sprintf("./logs/server_%d", port),
+			Name:           fmt.Sprintf("server_%d", port),
+			Version:        "0.0.1",
+			Location:       locations,
+			ChaosInjection: chaosInjection,
 		})
 	}
 
@@ -89,29 +104,13 @@ func createLocationsFromGroups(groups map[string][]database.BestMatch, db *sql.D
 
 		// Estructura base siempre presente
 		location := database.LocationConfig{
-			Path:        baseResponse.Endpoint,
-			Method:      baseResponse.Method,
-			Response:    baseResponse.Body,
-			StatusCode:  baseResponse.StatusCode, // Código exitoso (ej. 200)
-			ContentType: "application/json",
-			Headers:     headers,
-		}
-
-		if errorResponse != nil && errorResponse.StatusCode >= 300 {
-			// Calcular probabilidad de caos basada en datos históricos
-			probability, calculatedErrorCode, err := infra.CalculateChaosProbability(db, baseResponse.URL)
-			if err == nil && probability > 0 {
-				location.ChaosInjection = &database.ChaosInjection{
-					Probability: probability,
-					StatusCode:  calculatedErrorCode, // Código de error para inyección de caos
-				}
-			} else {
-				// Si no se puede calcular, usar el error encontrado directamente
-				location.ChaosInjection = &database.ChaosInjection{
-					Probability: 50.0, // Probabilidad por defecto (50%)
-					StatusCode:  errorResponse.StatusCode,
-				}
-			}
+			Path:       baseResponse.Endpoint,
+			Method:     baseResponse.Method,
+			Response:   baseResponse.Body,
+			StatusCode: baseResponse.StatusCode, // Código exitoso (ej. 200)
+			Headers: &database.Headers{
+				ContentType: "application/json",
+			},
 		}
 
 		locations = append(locations, location)

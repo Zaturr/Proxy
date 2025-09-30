@@ -55,25 +55,26 @@ type HTTPConfig struct {
 }
 
 type ServerConfig struct {
-	Listen     int              `yaml:"listen"`
-	Logger     bool             `yaml:"logger"`
-	LoggerPath string           `yaml:"logger_path"`
-	Name       string           `yaml:"name"`
-	Version    string           `yaml:"version"`
-	Location   []LocationConfig `yaml:"location"`
+	Listen         int              `yaml:"listen"`
+	Logger         bool             `yaml:"logger"`
+	Name           string           `yaml:"name"`
+	LoggerPath     string           `yaml:"logger_path"`
+	Version        string           `yaml:"version"`
+	Location       []LocationConfig `yaml:"location"`
+	ChaosInjection *ChaosInjection  `yaml:"chaos_injection,omitempty"`
 }
 
 type LocationConfig struct {
-	Path           string            `yaml:"path"`
-	Method         string            `yaml:"method"`
-	Response       string            `yaml:"response"`
-	StatusCode     int               `yaml:"status_code"`
-	ContentType    string            `yaml:"content_type,omitempty"`
-	Headers        map[string]string `yaml:"headers"`
-	Schema         string            `yaml:"schema,omitempty"`
-	ChaosInjection *ChaosInjection   `yaml:"chaos_injection,omitempty"`
+	Path       string   `yaml:"path"`
+	Method     string   `yaml:"method"`
+	Response   string   `yaml:"response"`
+	StatusCode int      `yaml:"status_code"`
+	Headers    *Headers `yaml:"headers"`
+	Schema     string   `yaml:"schema,omitempty"`
 }
-
+type Headers struct {
+	ContentType string `yaml:"content_type,omitempty"`
+}
 type ChaosInjection struct {
 	Probability float64 `yaml:"probability"`
 	StatusCode  int     `yaml:"status_code"`
