@@ -1,82 +1,46 @@
 package main
 
 import (
-	"bytes"
+	"database/sql"
 	"fmt"
-	"io"
 	"net/http"
-	"net/http/httputil"
-	"net/url"
-	"strings"
+	"proxy/database"
+	"proxy/handlers"
 
 	"github.com/gin-gonic/gin"
 )
 
-func proxy(c *gin.Context) {
-	targetURL := c.Query("url")
-	if targetURL == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "URL parameter required"})
-		return
-	}
-
-	remote, err := url.Parse(targetURL)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid URL"})
-		return
-	}
-
-	httputil.NewSingleHostReverseProxy(remote).ServeHTTP(c.Writer, c.Request)
+func MockingbirdProxyWrapper(c *gin.Context) {
+	handlers.MockingbirdProxy(db, c)
 }
 
-func MockingbirdProxy(c *gin.Context) {
-	path := c.Param("path")
-
-	// Mapear rutas a puertos de Mockingbird
-	var targetPort string
-	switch {
-	case strings.HasPrefix(path, "/jsonplaceholder"):
-		targetPort = "8080"
-
-	case strings.HasPrefix(path, "/callback"):
-		targetPort = "8080"
-	case strings.Contains(path, "/auth"):
-		targetPort = "8086"
-	default:
-		targetPort = "8080" // Default
-	}
-
-	targetURL := "https://pruebas.sypago.net" + ":" + targetPort
-	remote, _ := url.Parse(targetURL)
-
-	proxy := &httputil.ReverseProxy{
-		Rewrite: func(r *httputil.ProxyRequest) {
-			r.SetURL(remote)
-			r.Out.Host = r.In.Host // if desired
-			body, err := io.ReadAll(r.In.Body)
-
-			if err != nil {
-				fmt.Errorf("Error %s", err.Error())
-			}
-			fmt.Println("%s", body)
-			r.Out.Body = io.NopCloser(bytes.NewBuffer(body))
-		},
-		ModifyResponse: func(r *http.Response) error {
-			body, err := io.ReadAll(r.Body)
-
-			if err != nil {
-				return err
-			}
-			fmt.Println("%s", body)
-
-			r.Body = io.NopCloser(bytes.NewBuffer(body))
-			return nil
-		},
-	}
-
-	proxy.ServeHTTP(c.Writer, c.Request)
+func SearchHandlerWrapper(c *gin.Context) {
+	handlers.SearchHandler(db, c)
 }
+
+func SearchConfigHandlerWrapper(c *gin.Context) {
+	handlers.SearchConfigHandler(db, c)
+}
+
+func StatsHandlerWrapper(c *gin.Context) {
+	handlers.StatsHandler(db, c)
+}
+
+func CountHandlerWrapper(c *gin.Context) {
+	handlers.CountHandler(db, c)
+}
+
+var db *sql.DB
 
 func main() {
+	var err error
+	db, err = database.InitDB("./database/proxy.db")
+	if err != nil {
+		fmt.Printf("Error initializing database: %v\n", err)
+		return
+	}
+	defer db.Close()
+
 	r := gin.Default()
 
 	r.Use(func(c *gin.Context) {
@@ -90,18 +54,27 @@ func main() {
 		c.Next()
 	})
 
-	// Rutas para Mockingbird
-	r.Any("/*path", MockingbirdProxy)
+	r.Any("/*path", func(c *gin.Context) {
+		path := c.Request.URL.Path
 
-	// Proxy externo
-	//r.Any("/*proxyPath", proxy)
-
-	fmt.Println(" Proxy server running on :3000")
-	fmt.Println(" External proxy: http://localhost:3000/users?url=https://jsonplaceholder.typicode.com")
-	fmt.Println(" Mockingbird routes:")
-	fmt.Println(" - http://localhost:3000/mockingbird/jsonplaceholder/*")
-	fmt.Println(" - http://localhost:3000/mockingbird/sypago/*")
-	fmt.Println(" - http://localhost:3000/mockingbird/users/*")
+		if path == "/api/search" && c.Request.Method == "POST" {
+			SearchHandlerWrapper(c)
+			return
+		}
+		if path == "/api/search/config" && c.Request.Method == "POST" {
+			SearchConfigHandlerWrapper(c)
+			return
+		}
+		if path == "/api/stats" && c.Request.Method == "GET" {
+			StatsHandlerWrapper(c)
+			return
+		}
+		if path == "/api/count" && c.Request.Method == "GET" {
+			CountHandlerWrapper(c)
+			return
+		}
+		MockingbirdProxyWrapper(c)
+	})
 
 	r.Run(":3000")
 }
