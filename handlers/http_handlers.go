@@ -225,31 +225,6 @@ func SearchHandler(db *sql.DB, c *gin.Context) {
 	c.JSON(http.StatusOK, bestMatch)
 }
 
-// SimulateResponse simula una respuesta cuando no hay servidor de destino
-func SimulateResponse(db *sql.DB, c *gin.Context) {
-	proxyService := NewProxyService(db)
-	proxyService.HandleSimulatedResponse(c)
-}
-
-// HandleSimulatedResponse maneja la simulación de respuesta
-func (ps *ProxyService) HandleSimulatedResponse(c *gin.Context) {
-	headersJSON, _ := json.Marshal(c.Request.Header)
-	body, _ := io.ReadAll(c.Request.Body)
-	path := c.Request.URL.Path
-	targetPort := ps.portMapper.GetTargetPort(path)
-	portInt, _ := strconv.Atoi(targetPort)
-
-	requestID, _ := ps.requestLogger.LogRequest(c.Request.Method, c.Request.URL.String(), string(headersJSON), string(body), portInt)
-
-	responseBody := `{"message": "Simulated response", "status": "ok"}`
-	responseHeadersJSON, _ := json.Marshal(map[string]string{"Content-Type": "application/json"})
-	ps.responseLogger.LogResponse(requestID, 200, string(responseHeadersJSON), responseBody, portInt)
-	ps.yamlGenerator.GenerateYAMLAsync(c.Request.URL.Path, c.Request.Method)
-
-	c.Header("Content-Type", "application/json")
-	c.JSON(200, gin.H{"message": "Simulated response", "status": "ok", "path": c.Request.URL.Path, "method": c.Request.Method})
-}
-
 // StatsHandler maneja las estadísticas de requests
 func StatsHandler(db *sql.DB, c *gin.Context) {
 	if stats, err := yaml.GetRequestStats(db); err != nil {
@@ -259,7 +234,7 @@ func StatsHandler(db *sql.DB, c *gin.Context) {
 	}
 }
 
-// CountHandler maneja los conteos específicos
+// CountHandler maneja los conteos
 func CountHandler(db *sql.DB, c *gin.Context) {
 	countType := c.Query("type")
 

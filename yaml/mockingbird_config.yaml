@@ -1,12 +1,12 @@
 http:
     servers:
-        - listen: 5091
+        - listen: 8082
           logger: true
-          logger_path: ./logs/server_5091
-          name: server_5091
+          logger_path: ./logs/server_8082
+          name: server_8082
           version: 0.0.1
           location:
-            - path: /visor
+            - path: /anothrapi
               method: GET
               response: '{"message": "Hello, World!"}'
               status_code: 200
@@ -17,60 +17,25 @@ http:
                 Connection: ""
                 Postman-Token: ""
                 User-Agent: ""
-        - listen: 3005
+        - listen: 8086
           logger: true
-          logger_path: ./logs/server_3005
-          name: server_3005
+          logger_path: ./logs/server_8086
+          name: server_8086
           version: 0.0.1
           location:
-            - path: /grafana
-              method: GET
-              response: '{"message": "Hello, World!"}'
-              status_code: 200
-              content_type: application/json
-              headers:
-                Accept: ""
-                Accept-Encoding: ""
-                Connection: ""
-                Postman-Token: ""
-                User-Agent: ""
-        - listen: 8080
-          logger: true
-          logger_path: ./logs/server_8080
-          name: server_8080
-          version: 0.0.1
-          location:
-            - path: /data
-              method: GET
-              response: 404 page not found
-              status_code: 404
-              content_type: application/json
-              headers:
-                Accept: ""
-                Accept-Encoding: ""
-                Connection: ""
-                Postman-Token: ""
-                User-Agent: ""
-              chaos_injection:
-                probability: 100
-                status_code: 404
-            - path: /api/hello
-              method: GET
-              response: '{"message": "Hello, World!"}'
-              status_code: 200
-              content_type: application/json
-              headers:
-                Accept: ""
-                Accept-Encoding: ""
-                Connection: ""
-                Postman-Token: ""
-                User-Agent: ""
-              chaos_injection:
-                probability: 40
-                status_code: 500
-            - path: /api/callback
+            - path: /api/v1/auth/token
               method: POST
-              response: '{"message": "Callback ok"}'
+              response: |
+                {
+                  "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
+                  "expires_in": 3600,
+                  "refresh_expires_in": 1800,
+                  "refresh_token": "refresh_token_here",
+                  "token_type": "Bearer",
+                  "not_before_policy": 0,
+                  "session_state": "session_state_here",
+                  "scope": "openid profile email"
+                }
               status_code: 200
               content_type: application/json
               headers:
@@ -80,44 +45,13 @@ http:
                 Content-Length: ""
                 Postman-Token: ""
                 User-Agent: ""
-            - path: /sycom
-              method: GET
-              response: 404 page not found
-              status_code: 404
-              content_type: application/json
-              headers:
-                Accept: ""
-                Accept-Encoding: ""
-                Connection: ""
-                Postman-Token: ""
-                User-Agent: ""
-              chaos_injection:
-                probability: 33.33
-                status_code: 404
-        - listen: 8102
+        - listen: 3005
           logger: true
-          logger_path: ./logs/server_8102
-          name: server_8102
+          logger_path: ./logs/server_3005
+          name: server_3005
           version: 0.0.1
           location:
-            - path: /sycom
-              method: GET
-              response: '{"message": "Hello, World!"}'
-              status_code: 200
-              content_type: application/json
-              headers:
-                Accept: ""
-                Accept-Encoding: ""
-                Connection: ""
-                Postman-Token: ""
-                User-Agent: ""
-        - listen: 8082
-          logger: true
-          logger_path: ./logs/server_8082
-          name: server_8082
-          version: 0.0.1
-          location:
-            - path: /anothrapi
+            - path: /grafana
               method: GET
               response: '{"message": "Hello, World!"}'
               status_code: 200
@@ -162,6 +96,57 @@ http:
               chaos_injection:
                 probability: 100
                 status_code: 404
+        - listen: 8102
+          logger: true
+          logger_path: ./logs/server_8102
+          name: server_8102
+          version: 0.0.1
+          location:
+            - path: /sycom
+              method: GET
+              response: '{"message": "Hello, World!"}'
+              status_code: 200
+              content_type: application/json
+              headers:
+                Accept: ""
+                Accept-Encoding: ""
+                Connection: ""
+                Postman-Token: ""
+                User-Agent: ""
+        - listen: 3500
+          logger: true
+          logger_path: ./logs/server_3500
+          name: server_3500
+          version: 0.0.1
+          location:
+            - path: /check
+              method: GET
+              response: '{"message": "Hello, World!"}'
+              status_code: 200
+              content_type: application/json
+              headers:
+                Accept: ""
+                Accept-Encoding: ""
+                Connection: ""
+                Postman-Token: ""
+                User-Agent: ""
+        - listen: 5091
+          logger: true
+          logger_path: ./logs/server_5091
+          name: server_5091
+          version: 0.0.1
+          location:
+            - path: /visor
+              method: GET
+              response: '{"message": "Hello, World!"}'
+              status_code: 200
+              content_type: application/json
+              headers:
+                Accept: ""
+                Accept-Encoding: ""
+                Connection: ""
+                Postman-Token: ""
+                User-Agent: ""
         - listen: 8081
           logger: true
           logger_path: ./logs/server_8081
@@ -182,25 +167,15 @@ http:
               chaos_injection:
                 probability: 58.33
                 status_code: 500
-        - listen: 8086
+        - listen: 8080
           logger: true
-          logger_path: ./logs/server_8086
-          name: server_8086
+          logger_path: ./logs/server_8080
+          name: server_8080
           version: 0.0.1
           location:
-            - path: /api/v1/auth/token
+            - path: /api/callback
               method: POST
-              response: |
-                {
-                  "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
-                  "expires_in": 3600,
-                  "refresh_expires_in": 1800,
-                  "refresh_token": "refresh_token_here",
-                  "token_type": "Bearer",
-                  "not_before_policy": 0,
-                  "session_state": "session_state_here",
-                  "scope": "openid profile email"
-                }
+              response: '{"message": "Callback ok"}'
               status_code: 200
               content_type: application/json
               headers:
@@ -210,13 +185,35 @@ http:
                 Content-Length: ""
                 Postman-Token: ""
                 User-Agent: ""
-        - listen: 3500
-          logger: true
-          logger_path: ./logs/server_3500
-          name: server_3500
-          version: 0.0.1
-          location:
-            - path: /check
+            - path: /sycom
+              method: GET
+              response: 404 page not found
+              status_code: 404
+              content_type: application/json
+              headers:
+                Accept: ""
+                Accept-Encoding: ""
+                Connection: ""
+                Postman-Token: ""
+                User-Agent: ""
+              chaos_injection:
+                probability: 20
+                status_code: 404
+            - path: /data
+              method: GET
+              response: 404 page not found
+              status_code: 404
+              content_type: application/json
+              headers:
+                Accept: ""
+                Accept-Encoding: ""
+                Connection: ""
+                Postman-Token: ""
+                User-Agent: ""
+              chaos_injection:
+                probability: 100
+                status_code: 404
+            - path: /api/hello
               method: GET
               response: '{"message": "Hello, World!"}'
               status_code: 200
@@ -227,3 +224,6 @@ http:
                 Connection: ""
                 Postman-Token: ""
                 User-Agent: ""
+              chaos_injection:
+                probability: 40
+                status_code: 500

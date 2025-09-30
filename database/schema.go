@@ -39,7 +39,6 @@ func InitDB(dbPath string) (*sql.DB, error) {
 		FOREIGN KEY (request_id) REFERENCES proxy_requests (id)
 	);`
 
-	// Crear índices para mejorar el rendimiento
 	createIndexes := `
 	CREATE INDEX IF NOT EXISTS idx_responses_request_id ON proxy_responses(request_id);
 	CREATE INDEX IF NOT EXISTS idx_responses_port ON proxy_responses(port);
@@ -57,13 +56,11 @@ func InitDB(dbPath string) (*sql.DB, error) {
 		return nil, fmt.Errorf("error creating responses table: %v", err)
 	}
 
-	// Migración: agregar columna port si no existe
 	addPortColumnRequests := `ALTER TABLE proxy_requests ADD COLUMN port INTEGER;`
-	db.Exec(addPortColumnRequests) // Ignoramos el error si la columna ya existe
+	db.Exec(addPortColumnRequests)
 
 	addPortColumnResponses := `ALTER TABLE proxy_responses ADD COLUMN port INTEGER;`
-	db.Exec(addPortColumnResponses) // Ignoramos el error si la columna ya existe
-
+	db.Exec(addPortColumnResponses)
 	if _, err := db.Exec(createIndexes); err != nil {
 		return nil, fmt.Errorf("error creating indexes: %v", err)
 	}

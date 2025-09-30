@@ -20,9 +20,8 @@ const (
 const baseQuery = `SELECT r.id, r.method, r.url, r.headers, r.body, r.port, res.status_code, res.body as response_body
 				   FROM proxy_requests r LEFT JOIN proxy_responses res ON r.id = res.request_id`
 
-// HierarchicalSearch realiza una búsqueda jerárquica en la base de datos
+// HierarchicalSearch realiza una búsqueda jerárquica en la bd
 func HierarchicalSearch(db *sql.DB, criteria SearchCriteria) (*BestMatch, error) {
-	// Lista de funciones de búsqueda en orden de prioridad
 	searchers := []func(*sql.DB, SearchCriteria) (*BestMatch, error){
 		searchByURL,          // Prioridad 100
 		searchByEndpoint,     // Prioridad 80
@@ -32,7 +31,6 @@ func HierarchicalSearch(db *sql.DB, criteria SearchCriteria) (*BestMatch, error)
 		searchByMethod,       // Prioridad 10
 	}
 
-	// Ejecutar búsquedas en orden de prioridad
 	for _, searcher := range searchers {
 		result, err := searcher(db, criteria)
 		if err != nil {
@@ -47,7 +45,6 @@ func HierarchicalSearch(db *sql.DB, criteria SearchCriteria) (*BestMatch, error)
 	return nil, nil
 }
 
-// GetAllRequestsForYAML obtiene todos los requests para generar configuración YAML
 func GetAllRequestsForYAML(db *sql.DB) ([]BestMatch, error) {
 	query := baseQuery + " WHERE res.status_code IS NOT NULL ORDER BY r.timestamp DESC"
 	return executeMultipleSearch(db, query)
@@ -62,7 +59,6 @@ func GetSimilarRequests(db *sql.DB, criteria SearchCriteria) ([]BestMatch, error
 	return executeMultipleSearch(db, query, "%"+criteria.Endpoint+"%", criteria.Method)
 }
 
-// executeMultipleSearch ejecuta una consulta que retorna múltiples resultados
 func executeMultipleSearch(db *sql.DB, query string, args ...interface{}) ([]BestMatch, error) {
 	rows, err := db.Query(query, args...)
 	if err != nil {
@@ -74,7 +70,7 @@ func executeMultipleSearch(db *sql.DB, query string, args ...interface{}) ([]Bes
 	for rows.Next() {
 		match, err := scanRowToBestMatch(rows)
 		if err != nil {
-			continue // Skip errores de parsing individuales
+			continue
 		}
 		matches = append(matches, *match)
 	}
@@ -82,7 +78,6 @@ func executeMultipleSearch(db *sql.DB, query string, args ...interface{}) ([]Bes
 	return matches, nil
 }
 
-// Función genérica para ejecutar búsquedas que retornan un solo resultado
 func executeSearch(db *sql.DB, query string, args ...interface{}) (*BestMatch, error) {
 	rows, err := db.Query(query, args...)
 	if err != nil {
