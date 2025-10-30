@@ -40,11 +40,11 @@ func GenerateYAMLFromDB(db *sql.DB, endpoint, method string) (string, error) {
 		})
 	}
 
-	// Generar configuración
-	config := build.GenerateMockingbirdConfig(buildMatches, db)
+    // Generar configuración estricta
+    config := build.GenerateMockingbirdConfigStrict(buildMatches, db)
 
-	// Convertir a YAML
-	yamlString, err := ToYAML(config)
+    // Convertir a YAML
+    yamlString, err := ToYAMLStrict(config)
 	if err != nil {
 		return "", fmt.Errorf("error generating YAML: %v", err)
 	}
@@ -144,4 +144,13 @@ func ToYAML(config *database.MockingbirdConfig) (string, error) {
 		return "", err
 	}
 	return string(yamlData), nil
+}
+
+// ToYAMLStrict convierte la configuración estricta a YAML
+func ToYAMLStrict(config *build.MockServer) (string, error) {
+    yamlData, err := yaml.Marshal(config)
+    if err != nil {
+        return "", err
+    }
+    return string(yamlData), nil
 }

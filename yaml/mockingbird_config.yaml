@@ -2,16 +2,16 @@ http:
     servers:
         - listen: 1231
           logger: true
-          name: server_1231
-          logger_path: ./logs/server_1231
-          version: 0.0.1
           location:
+            - path: /bancrecer/simf/1.0.0/enviar
+              method: POST
+              response: '{ "Amount": 45.75, "Bank": "Bancrecer", "Currency": "VES", "EndToEndId": "0168202510301557111730", "Product": "Credito Inmediato", "Date": "2025 Oct 30", "Time": "09:52 a. m.", "Description": "Pago de servicios", "Reference": "00201511", "Status": "Pagado", "StatusCode": 1, "Destiny": "0100552008080", "Symbol": "Bs.", "Reason": "" }'
+              headers:
+                Content-Type: application/json
+              status_code: 200
             - path: /bancrecer/simf/1.0.0/operaciones
               method: POST
-              response: ""
-              status_code: 0
+              response: '[ { "OperationId": 632375, "UserCore": 0, "UserName": "USUARIO V23619040", "UserIdentification": "V23619040", "Channel": "0001", "OriginBank": "0168", "OriginBankName": "Bancrecer", "OriginName": "PRUEBA", "OriginIdType": "SCID", "OriginId": "V23619040", "OriginType": "CNTA", "OriginAccount": "01685842755862292580", "OriginAccountType": "CTE", "DestinyBank": "0134", "DestinyBankName": "Banesco", "DestinyIdType": "SCID", "DestinyId": "V34873970", "DestinyName": "BENEFICIARIO 3", "DestinyType": "CELE", "DestinyAccount": "73350508414", "DestinyAccountType": "CELE", "ProductId": 0, "EndToEndId": "016820251030155631915", "OriginEndToEndId": "", "Reference": "98692062", "OperationDate": "2025-10-30T15:56:31", "Amount": 9157.13, "Currency": "VES", "CurrencyCode": 7, "StatusCode": 2, "Status": "Pagado", "Service": "Crédito Inmediato", "Description": "prueba de 08-2023", "ReasonCode": "", "Reason": "", "Symbol": "Bs.", "TrxDb": 565, "TrxCr": 80, "MessageId": "", "Mask": "", "CanApprove": false } ]'
               headers:
-                content_type: application/json
-          chaos_injection:
-            probability: 100
-            status_code: 300
+                Content-Type: application/json
+              status_code: 200
