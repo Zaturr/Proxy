@@ -61,11 +61,10 @@ func CalculateChaosProbability(db *sql.DB, url string) (float64, int, error) {
 // getMostCommonErrorStatusCode obtiene el status code de error más común para una URL
 func getMostCommonErrorStatusCode(db *sql.DB, url string) (int, error) {
 	query := `
-		SELECT res.status_code, COUNT(*) as count
-		FROM proxy_requests req
-		LEFT JOIN proxy_responses res ON res.request_id = req.id
-		WHERE req.url = ? AND res.status_code >= 300
-		GROUP BY res.status_code
+		SELECT response_status_code, COUNT(*) as count
+		FROM mock_transactions
+		WHERE request_endpoint = ? AND response_status_code >= 300
+		GROUP BY response_status_code
 		ORDER BY count DESC
 		LIMIT 1
 	`
@@ -86,14 +85,10 @@ func getMostCommonErrorStatusCode(db *sql.DB, url string) (int, error) {
 // CountRejectedRequests cuenta los rechazos por URL
 func CountRejectedRequests(db *sql.DB) (map[string]int, error) {
 	query := `
-		SELECT sub.url, COUNT(sub.url) as count 
-		FROM (
-			SELECT req.url, COALESCE(req.port, 8080) as port, res.status_code, res.headers, res.body   
-			FROM proxy_requests req
-			LEFT JOIN proxy_responses res ON res.request_id = req.id
-			WHERE res.status_code > 299
-		) sub
-		GROUP BY sub.url
+		SELECT request_endpoint, COUNT(request_endpoint) as count 
+		FROM mock_transactions
+		WHERE response_status_code > 299
+		GROUP BY request_endpoint
 	`
 
 	rows, err := db.Query(query)
@@ -119,14 +114,10 @@ func CountRejectedRequests(db *sql.DB) (map[string]int, error) {
 // CountApprovedRequests cuenta los aprobados por URL
 func CountApprovedRequests(db *sql.DB) (map[string]int, error) {
 	query := `
-		SELECT sub.url, COUNT(sub.url) as count 
-		FROM (
-			SELECT req.url, COALESCE(req.port, 8080) as port, res.status_code, res.headers, res.body   
-			FROM proxy_requests req
-			LEFT JOIN proxy_responses res ON res.request_id = req.id
-			WHERE res.status_code BETWEEN 100 AND 299
-		) sub
-		GROUP BY sub.url
+		SELECT request_endpoint, COUNT(request_endpoint) as count 
+		FROM mock_transactions
+		WHERE response_status_code BETWEEN 100 AND 299
+		GROUP BY request_endpoint
 	`
 
 	rows, err := db.Query(query)
@@ -147,4 +138,34 @@ func CountApprovedRequests(db *sql.DB) (map[string]int, error) {
 	}
 
 	return counts, nil
+}
+
+// GetTransactionUnified obtiene una transacción desde la tabla unificada
+func GetTransactionUnified(db *sql.DB, uuid string) (*database.ProxyTransaction, error) {
+	return database.GetTransactionUnified(db, uuid)
+}
+
+// InsertTransactionUnified inserta una transacción completa en la tabla unificada
+func InsertTransactionUnified(db *sql.DB, request *database.ProxyRequest, response *database.ProxyResponse) error {
+	return database.InsertTransactionUnified(db, request, response)
+}
+
+// GetAllTransactionsUnified obtiene todas las transacciones desde la tabla unificada
+func GetAllTransactionsUnified(db *sql.DB, limit, offset int) ([]database.ProxyTransaction, error) {
+	return database.GetAllTransactionsUnified(db, limit, offset)
+}
+
+// HierarchicalSearchUnified realiza una búsqueda jerárquica en la tabla unificada
+func HierarchicalSearchUnified(db *sql.DB, criteria database.SearchCriteria) (*database.BestMatch, error) {
+	return database.HierarchicalSearchUnified(db, criteria)
+}
+
+// GetAllRequestsForYAMLUnified obtiene todas las requests para YAML desde la tabla unificada
+func GetAllRequestsForYAMLUnified(db *sql.DB) ([]database.BestMatch, error) {
+	return database.GetAllRequestsForYAMLUnified(db)
+}
+
+// GetSimilarRequestsUnified obtiene requests similares desde la tabla unificada
+func GetSimilarRequestsUnified(db *sql.DB, criteria database.SearchCriteria) ([]database.BestMatch, error) {
+	return database.GetSimilarRequestsUnified(db, criteria)
 }

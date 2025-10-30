@@ -11,9 +11,9 @@ import (
 	"net/url"
 	yaml "proxy/data"
 	"proxy/database"
-	infra "proxy/database/infraestructure"
 	"proxy/handlers/port"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -107,18 +107,49 @@ func (pm *PortMapper) GetTargetProtocol(port string) string {
 
 // LogRequest registra un request en la base de datos
 func (rl *RequestLogger) LogRequest(method, url, headers, body string, port int) (int64, error) {
-	requestID, err := infra.InsertRequest(rl.db, method, url, headers, body, port)
+	// Generar un timestamp único para este request
+	timestamp := time.Now().UnixNano()
+
+	// Crear una transacción unificada con solo el request (sin response aún)
+    mockdata := &database.Mockdata{
+		UUID:               fmt.Sprintf("req_%d_%d", timestamp, port),
+		RequestHeaders:     headers,
+		RequestMethod:      method,
+		RequestEndpoint:    url,
+		RequestBody:        body,
+		ResponseHeaders:    "",
+		ResponseBody:       "",
+		ResponseStatusCode: 0,
+		Timestamp:          time.Now(),
+        Port:               port,
+	}
+
+	fmt.Printf("DEBUG: Inserting request with UUID: %s\n", mockdata.UUID)
+	err := database.InsertOperation(rl.db, mockdata)
 	if err != nil {
+		fmt.Printf("DEBUG: Error inserting request: %v\n", err)
 		return 0, &ProxyError{Type: "DatabaseInsert", Message: "Failed to insert request", Err: err}
 	}
-	return requestID, nil
+	fmt.Printf("DEBUG: Request inserted successfully\n")
+
+	// Retornar el mismo timestamp que se usó para el UUID
+	return timestamp, nil
 }
 
 // LogResponse registra una response en la base de datos
 func (rl *ResponseLogger) LogResponse(requestID int64, statusCode int, headers, body string, port int) error {
-	if err := infra.InsertResponse(rl.db, requestID, statusCode, headers, body, port); err != nil {
-		return &ProxyError{Type: "DatabaseInsert", Message: "Failed to insert response", Err: err}
+	// Buscar la transacción existente por UUID (usando el requestID como parte del UUID)
+	// Como el requestID es un timestamp, necesitamos buscar por el UUID que contiene ese timestamp
+	uuid := fmt.Sprintf("req_%d_%d", requestID, port)
+
+	// Actualizar la transacción existente con la respuesta
+	fmt.Printf("DEBUG: Updating response for UUID: %s\n", uuid)
+	err := database.UpdateOperationResponse(rl.db, uuid, headers, body, statusCode)
+	if err != nil {
+		fmt.Printf("DEBUG: Error updating response: %v\n", err)
+		return &ProxyError{Type: "DatabaseUpdate", Message: "Failed to update response", Err: err}
 	}
+	fmt.Printf("DEBUG: Response updated successfully\n")
 	return nil
 }
 
@@ -141,13 +172,14 @@ func MockingbirdProxy(db *sql.DB, c *gin.Context) {
 // HandleProxyRequest maneja una request del proxy
 func (ps *ProxyService) HandleProxyRequest(c *gin.Context) {
 	path := c.Param("path")
+	fmt.Printf("DEBUG: HandleProxyRequest called with path: %s\n", path)
 
 	// Obtener puerto y protocolo usando el servicio
 	targetPort := ps.portMapper.GetTargetPort(path)
 	protocol := ps.portMapper.GetTargetProtocol(targetPort)
 	targetURL := protocol + "://localhost:" + targetPort
 
-	fmt.Printf("Path: %s, Target Port: %s, Protocol: %s, Target URL: %s\n", path, targetPort, protocol, targetURL)
+	fmt.Printf("DEBUG: Path: %s, Target Port: %s, Protocol: %s, Target URL: %s\n", path, targetPort, protocol, targetURL)
 
 	remote, err := url.Parse(targetURL)
 	if err != nil {
@@ -169,12 +201,14 @@ func (ps *ProxyService) HandleProxyRequest(c *gin.Context) {
 
 // handleRequestRewrite maneja la lógica de rewrite del request
 func (ps *ProxyService) handleRequestRewrite(r *httputil.ProxyRequest, c *gin.Context, targetPort string, remote *url.URL) {
+	fmt.Printf("DEBUG: handleRequestRewrite called\n")
 	r.SetURL(remote)
 	r.Out.Host = r.In.Host
 
 	body, _ := io.ReadAll(r.In.Body)
 	headersJSON, _ := json.Marshal(r.In.Header)
 	portInt, _ := strconv.Atoi(targetPort)
+	fmt.Printf("DEBUG: About to call LogRequest\n")
 
 	if requestID, err := ps.requestLogger.LogRequest(r.In.Method, r.In.URL.String(), string(headersJSON), string(body), portInt); err != nil {
 		fmt.Printf("Error logging request: %v\n", err)
@@ -211,7 +245,7 @@ func SearchHandler(db *sql.DB, c *gin.Context) {
 		return
 	}
 
-	bestMatch, err := database.HierarchicalSearch(db, criteria)
+	bestMatch, err := database.HierarchicalSearchUnified(db, criteria)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Search failed"})
 		return
